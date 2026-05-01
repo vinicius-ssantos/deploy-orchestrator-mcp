@@ -8,6 +8,7 @@ def test_python_project_prefers_render():
 
     assert analysis["runtime"] == "python"
     assert plan["app_provider"]["provider"] == "render"
+    assert plan["provider_plan"]["provider"] == "render"
     assert plan["mode"] == "dry-run"
 
 
@@ -17,6 +18,7 @@ def test_dockerfile_prefers_fly():
 
     assert analysis["has_dockerfile"] is True
     assert plan["app_provider"]["provider"] == "fly"
+    assert plan["provider_plan"] is None
 
 
 def test_supabase_project_prefers_supabase_database():
@@ -25,3 +27,5 @@ def test_supabase_project_prefers_supabase_database():
 
     assert analysis["needs_supabase"] is True
     assert plan["database_provider"]["provider"] == "supabase"
+    assert plan["database_plan"]["provider"] == "supabase"
+    assert plan["database_plan"]["mode"] == "dry-run"
