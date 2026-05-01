@@ -1,9 +1,65 @@
+from deploy_orchestrator_mcp.railway_provider import railway_generate_service_plan
+from deploy_orchestrator_mcp.render_provider import render_generate_service_plan
 from deploy_orchestrator_mcp.recommender import recommend_app_provider, recommend_database_provider
+from deploy_orchestrator_mcp.supabase_provider import supabase_generate_project_plan
+
+
+def _service_name_from_analysis(analysis):
+    if analysis.get("runtime") == "python":
+        return "python-service"
+    if analysis.get("runtime") == "node":
+        return "node-service"
+    if analysis.get("runtime") == "java":
+        return "java-service"
+    return "app-service"
+
+
+def _build_provider_plan(analysis, app_provider, database_provider, environment):
+    provider = app_provider["provider"]
+    service_name = _service_name_from_analysis(analysis)
+    repo_full_name = analysis.get("repo_full_name", "unknown/repository")
+
+    if provider == "render":
+        return render_generate_service_plan(
+            repo_full_name=repo_full_name,
+            service_name=service_name,
+            environment=environment,
+        )
+
+    if provider == "railway":
+        return railway_generate_service_plan(
+            repo_full_name=repo_full_name,
+            service_name=service_name,
+            environment=environment,
+            needs_postgres=database_provider is not None,
+        )
+
+    return None
+
+
+def _build_database_plan(analysis, database_provider, environment):
+    if not database_provider:
+        return None
+
+    provider = database_provider["provider"]
+    project_name = _service_name_from_analysis(analysis)
+
+    if provider == "supabase":
+        return supabase_generate_project_plan(
+            project_name=project_name,
+            environment=environment,
+            needs_auth=True,
+            needs_storage=True,
+        )
+
+    return None
 
 
 def generate_deployment_plan(analysis, environment="staging"):
     app_provider = recommend_app_provider(analysis)
     database_provider = recommend_database_provider(analysis)
+    provider_plan = _build_provider_plan(analysis, app_provider, database_provider, environment)
+    database_plan = _build_database_plan(analysis, database_provider, environment)
 
     steps = [
         "Review repository analysis",
@@ -35,6 +91,8 @@ def generate_deployment_plan(analysis, environment="staging"):
         "environment": environment,
         "app_provider": app_provider,
         "database_provider": database_provider,
+        "provider_plan": provider_plan,
+        "database_plan": database_plan,
         "steps": steps,
         "approval_required": approval_required,
         "risks": risks,
