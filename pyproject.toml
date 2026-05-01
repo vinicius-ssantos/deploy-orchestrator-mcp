@@ -1,0 +1,14 @@
+[project]
+name = "deploy-orchestrator-mcp"
+version = "0.1.0"
+description = "Remote MCP server for multi-provider deployment orchestration"
+requires-python = ">=3.11"
+dependencies = [
+  "fastmcp",
+  "httpx",
+  "pydantic",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
