@@ -1,4 +1,5 @@
 from deploy_orchestrator_mcp.fly_provider import fly_generate_app_plan
+from deploy_orchestrator_mcp.policy import evaluate_policy
 from deploy_orchestrator_mcp.railway_provider import railway_generate_service_plan
 from deploy_orchestrator_mcp.render_provider import render_generate_service_plan
 from deploy_orchestrator_mcp.recommender import recommend_app_provider, recommend_database_provider
@@ -64,15 +65,22 @@ def _build_database_plan(analysis, database_provider, environment):
     return None
 
 
-def generate_deployment_plan(analysis, environment="staging"):
+def generate_deployment_plan(analysis, environment="staging", policy=None):
     app_provider = recommend_app_provider(analysis)
     database_provider = recommend_database_provider(analysis)
     provider_plan = _build_provider_plan(analysis, app_provider, database_provider, environment)
     database_plan = _build_database_plan(analysis, database_provider, environment)
+    policy_result = evaluate_policy(
+        policy=policy,
+        environment=environment,
+        app_provider=app_provider["provider"],
+        database_provider=database_provider["provider"] if database_provider else None,
+    )
 
     steps = [
         "Review repository analysis",
         "Confirm selected environment",
+        "Evaluate repository deployment policy",
         "Prepare provider configuration",
         "Configure required environment variables",
         "Run CI before deployment",
@@ -87,7 +95,7 @@ def generate_deployment_plan(analysis, environment="staging"):
     ]
 
     if database_provider:
-        steps.insert(3, "Provision database or backend provider")
+        steps.insert(4, "Provision database or backend provider")
         approval_required.append("create database")
 
     risks = []
@@ -95,6 +103,8 @@ def generate_deployment_plan(analysis, environment="staging"):
         risks.append("Production deployment requires explicit approval")
     if analysis.get("runtime") == "unknown":
         risks.append("Runtime could not be detected with confidence")
+    if not policy_result["valid"]:
+        risks.append("Repository policy validation failed")
 
     return {
         "environment": environment,
@@ -102,6 +112,7 @@ def generate_deployment_plan(analysis, environment="staging"):
         "database_provider": database_provider,
         "provider_plan": provider_plan,
         "database_plan": database_plan,
+        "policy_result": policy_result,
         "steps": steps,
         "approval_required": approval_required,
         "risks": risks,
