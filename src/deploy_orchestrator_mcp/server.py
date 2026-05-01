@@ -4,6 +4,10 @@ from deploy_orchestrator_mcp.analyzer import analyze_file_list
 from deploy_orchestrator_mcp.config import get_settings
 from deploy_orchestrator_mcp.planner import generate_deployment_plan
 from deploy_orchestrator_mcp.providers import get_provider_capability, list_provider_capabilities
+from deploy_orchestrator_mcp.render_provider import (
+    render_generate_service_plan,
+    render_validate_request,
+)
 
 mcp = FastMCP("deploy-orchestrator-mcp")
 
@@ -48,6 +52,22 @@ def deploy_generate_plan(files: list[str], environment: str = "staging"):
     """Generate a dry-run deployment plan from repository file paths."""
     analysis = analyze_file_list(files)
     return generate_deployment_plan(analysis, environment=environment)
+
+
+@mcp.tool()
+def render_validate(environment: str = "staging"):
+    """Validate whether a Render dry-run request is allowed."""
+    return render_validate_request(environment=environment)
+
+
+@mcp.tool()
+def render_service_plan(repo_full_name: str, service_name: str, environment: str = "staging"):
+    """Generate a dry-run Render service plan without executing provider writes."""
+    return render_generate_service_plan(
+        repo_full_name=repo_full_name,
+        service_name=service_name,
+        environment=environment,
+    )
 
 
 if __name__ == "__main__":
