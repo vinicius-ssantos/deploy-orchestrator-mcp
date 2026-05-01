@@ -1,0 +1,41 @@
+version: 1
+
+repository: vinicius-ssantos/deploy-orchestrator-mcp
+
+allowed_environments:
+  - preview
+  - staging
+
+allowed_app_providers:
+  - render
+  - railway
+  - fly
+  - koyeb
+  - coolify
+
+allowed_database_providers:
+  - supabase
+  - same-provider-postgres
+  - railway-postgres
+  - render-postgres
+  - koyeb-database
+  - coolify-postgres
+
+production:
+  allowed: false
+  requires_approval: true
+
+approvals:
+  create_service: true
+  set_environment_variables: true
+  trigger_deployment: true
+  create_database: true
+  apply_migrations: true
+  rollback: true
+  configure_domain: true
+
+rules:
+  require_dry_run_first: true
+  require_healthcheck: true
+  never_return_secret_values: true
+  redact_logs: true
