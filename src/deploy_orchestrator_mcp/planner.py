@@ -1,3 +1,4 @@
+from deploy_orchestrator_mcp.fly_provider import fly_generate_app_plan
 from deploy_orchestrator_mcp.railway_provider import railway_generate_service_plan
 from deploy_orchestrator_mcp.render_provider import render_generate_service_plan
 from deploy_orchestrator_mcp.recommender import recommend_app_provider, recommend_database_provider
@@ -32,6 +33,14 @@ def _build_provider_plan(analysis, app_provider, database_provider, environment)
             service_name=service_name,
             environment=environment,
             needs_postgres=database_provider is not None,
+        )
+
+    if provider == "fly":
+        return fly_generate_app_plan(
+            repo_full_name=repo_full_name,
+            app_name=service_name,
+            environment=environment,
+            needs_volume=database_provider is not None,
         )
 
     return None
