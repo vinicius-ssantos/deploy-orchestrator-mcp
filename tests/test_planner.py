@@ -18,7 +18,8 @@ def test_dockerfile_prefers_fly():
 
     assert analysis["has_dockerfile"] is True
     assert plan["app_provider"]["provider"] == "fly"
-    assert plan["provider_plan"] is None
+    assert plan["provider_plan"]["provider"] == "fly"
+    assert plan["provider_plan"]["mode"] == "dry-run"
 
 
 def test_supabase_project_prefers_supabase_database():
