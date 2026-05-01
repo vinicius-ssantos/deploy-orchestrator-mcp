@@ -2,6 +2,7 @@ from fastmcp import FastMCP
 
 from deploy_orchestrator_mcp.analyzer import analyze_file_list
 from deploy_orchestrator_mcp.config import get_settings
+from deploy_orchestrator_mcp.fly_provider import fly_generate_app_plan, fly_validate_request
 from deploy_orchestrator_mcp.planner import generate_deployment_plan
 from deploy_orchestrator_mcp.providers import get_provider_capability, list_provider_capabilities
 from deploy_orchestrator_mcp.railway_provider import (
@@ -105,6 +106,28 @@ def railway_service_plan(
 def railway_postgres_plan(project_name: str, environment: str = "staging"):
     """Generate a dry-run Railway Postgres plan without executing provider writes."""
     return railway_generate_postgres_plan(project_name=project_name, environment=environment)
+
+
+@mcp.tool()
+def fly_validate(environment: str = "staging"):
+    """Validate whether a Fly dry-run request is allowed."""
+    return fly_validate_request(environment=environment)
+
+
+@mcp.tool()
+def fly_app_plan(
+    repo_full_name: str,
+    app_name: str,
+    environment: str = "staging",
+    needs_volume: bool = False,
+):
+    """Generate a dry-run Fly app plan without executing provider writes."""
+    return fly_generate_app_plan(
+        repo_full_name=repo_full_name,
+        app_name=app_name,
+        environment=environment,
+        needs_volume=needs_volume,
+    )
 
 
 @mcp.tool()
