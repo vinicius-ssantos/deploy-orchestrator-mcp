@@ -1,10 +1,17 @@
 from fastmcp import FastMCP
 
 from deploy_orchestrator_mcp.analyzer import analyze_file_list
+from deploy_orchestrator_mcp.config import get_settings
 from deploy_orchestrator_mcp.planner import generate_deployment_plan
 from deploy_orchestrator_mcp.providers import get_provider_capability, list_provider_capabilities
 
 mcp = FastMCP("deploy-orchestrator-mcp")
+
+
+@mcp.tool()
+def safety_settings():
+    """Return current safety settings without exposing secrets."""
+    return get_settings()
 
 
 @mcp.tool()
