@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: deploy-orchestrator-mcp
+    runtime: docker
+    plan: free
+    envVars:
+      - key: MCP_READ_ONLY
+        value: "true"
+      - key: MCP_REQUIRE_CONFIRMATION
+        value: "true"
