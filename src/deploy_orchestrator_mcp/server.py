@@ -2,6 +2,11 @@ from fastmcp import FastMCP
 
 from deploy_orchestrator_mcp.analyzer import analyze_file_list
 from deploy_orchestrator_mcp.config import get_settings
+from deploy_orchestrator_mcp.coolify_provider import (
+    coolify_generate_app_plan,
+    coolify_generate_database_plan,
+    coolify_validate_request,
+)
 from deploy_orchestrator_mcp.fly_provider import fly_generate_app_plan, fly_validate_request
 from deploy_orchestrator_mcp.koyeb_provider import koyeb_generate_service_plan, koyeb_validate_request
 from deploy_orchestrator_mcp.planner import generate_deployment_plan
@@ -154,6 +159,50 @@ def koyeb_service_plan(
         environment=environment,
         service_type=service_type,
         source=source,
+    )
+
+
+@mcp.tool()
+def coolify_validate(environment: str = "staging"):
+    """Validate whether a Coolify dry-run request is allowed."""
+    return coolify_validate_request(environment=environment)
+
+
+@mcp.tool()
+def coolify_app_plan(
+    repo_full_name: str,
+    project_name: str,
+    app_name: str,
+    environment: str = "staging",
+    deployment_method: str = "github-app",
+    needs_database: bool = False,
+    enable_preview: bool = False,
+):
+    """Generate a dry-run Coolify application plan without executing provider writes."""
+    return coolify_generate_app_plan(
+        repo_full_name=repo_full_name,
+        project_name=project_name,
+        app_name=app_name,
+        environment=environment,
+        deployment_method=deployment_method,
+        needs_database=needs_database,
+        enable_preview=enable_preview,
+    )
+
+
+@mcp.tool()
+def coolify_database_plan(
+    project_name: str,
+    database_name: str,
+    engine: str = "postgres",
+    environment: str = "staging",
+):
+    """Generate a dry-run Coolify database plan without executing provider writes."""
+    return coolify_generate_database_plan(
+        project_name=project_name,
+        database_name=database_name,
+        engine=engine,
+        environment=environment,
     )
 
 
