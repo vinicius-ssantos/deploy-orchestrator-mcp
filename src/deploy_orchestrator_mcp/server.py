@@ -10,6 +10,7 @@ from deploy_orchestrator_mcp.coolify_provider import (
 from deploy_orchestrator_mcp.fly_provider import fly_generate_app_plan, fly_validate_request
 from deploy_orchestrator_mcp.koyeb_provider import koyeb_generate_service_plan, koyeb_validate_request
 from deploy_orchestrator_mcp.planner import generate_deployment_plan
+from deploy_orchestrator_mcp.policy import evaluate_policy
 from deploy_orchestrator_mcp.providers import get_provider_capability, list_provider_capabilities
 from deploy_orchestrator_mcp.railway_provider import (
     railway_generate_postgres_plan,
@@ -32,6 +33,22 @@ mcp = FastMCP("deploy-orchestrator-mcp")
 def safety_settings():
     """Return current safety settings without exposing secrets."""
     return get_settings()
+
+
+@mcp.tool()
+def policy_evaluate(
+    environment: str,
+    app_provider: str,
+    database_provider: str | None = None,
+    policy: dict | None = None,
+):
+    """Evaluate repository deployment policy for a planned deployment."""
+    return evaluate_policy(
+        policy=policy,
+        environment=environment,
+        app_provider=app_provider,
+        database_provider=database_provider,
+    )
 
 
 @mcp.tool()
