@@ -7,6 +7,18 @@ It is designed to work together with `github-unified-mcp`:
 - `github-unified-mcp`: repositories, files, branches, pull requests, GitHub Actions, checks, releases.
 - `deploy-orchestrator-mcp`: app hosting, database/backend provisioning, deploys, logs, healthchecks, rollback and provider recommendation.
 
+## Current status
+
+MVP dry-run scaffold.
+
+Implemented tools:
+
+- `provider_list`
+- `repo_analyze`
+- `deploy_generate_plan`
+
+The server does not execute real deploys yet.
+
 ## Initial providers
 
 App providers:
@@ -44,6 +56,27 @@ Returning:
 - risk assessment
 - deployment steps
 - approval-required actions
+
+## Local setup
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e . pytest
+pytest -q
+python -m deploy_orchestrator_mcp.server
+```
+
+Windows PowerShell:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -e . pytest
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m deploy_orchestrator_mcp.server
+```
 
 ## Safety posture
 
