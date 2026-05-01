@@ -8,6 +8,10 @@ from deploy_orchestrator_mcp.render_provider import (
     render_generate_service_plan,
     render_validate_request,
 )
+from deploy_orchestrator_mcp.supabase_provider import (
+    supabase_generate_project_plan,
+    supabase_validate_request,
+)
 
 mcp = FastMCP("deploy-orchestrator-mcp")
 
@@ -67,6 +71,28 @@ def render_service_plan(repo_full_name: str, service_name: str, environment: str
         repo_full_name=repo_full_name,
         service_name=service_name,
         environment=environment,
+    )
+
+
+@mcp.tool()
+def supabase_validate(environment: str = "staging"):
+    """Validate whether a Supabase dry-run request is allowed."""
+    return supabase_validate_request(environment=environment)
+
+
+@mcp.tool()
+def supabase_project_plan(
+    project_name: str,
+    environment: str = "staging",
+    needs_auth: bool = False,
+    needs_storage: bool = False,
+):
+    """Generate a dry-run Supabase project plan without executing provider writes."""
+    return supabase_generate_project_plan(
+        project_name=project_name,
+        environment=environment,
+        needs_auth=needs_auth,
+        needs_storage=needs_storage,
     )
 
 
