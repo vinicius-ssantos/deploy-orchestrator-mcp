@@ -81,10 +81,14 @@ def repo_analyze(files: list[str]):
 
 
 @mcp.tool()
-def deploy_generate_plan(files: list[str], environment: str = "staging"):
+def deploy_generate_plan(
+    files: list[str],
+    environment: str = "staging",
+    policy: dict | None = None,
+):
     """Generate a dry-run deployment plan from repository file paths."""
     analysis = analyze_file_list(files)
-    return generate_deployment_plan(analysis, environment=environment)
+    return generate_deployment_plan(analysis, environment=environment, policy=policy)
 
 
 @mcp.tool()
