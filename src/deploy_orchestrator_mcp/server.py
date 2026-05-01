@@ -3,6 +3,7 @@ from fastmcp import FastMCP
 from deploy_orchestrator_mcp.analyzer import analyze_file_list
 from deploy_orchestrator_mcp.config import get_settings
 from deploy_orchestrator_mcp.fly_provider import fly_generate_app_plan, fly_validate_request
+from deploy_orchestrator_mcp.koyeb_provider import koyeb_generate_service_plan, koyeb_validate_request
 from deploy_orchestrator_mcp.planner import generate_deployment_plan
 from deploy_orchestrator_mcp.providers import get_provider_capability, list_provider_capabilities
 from deploy_orchestrator_mcp.railway_provider import (
@@ -127,6 +128,32 @@ def fly_app_plan(
         app_name=app_name,
         environment=environment,
         needs_volume=needs_volume,
+    )
+
+
+@mcp.tool()
+def koyeb_validate(environment: str = "staging"):
+    """Validate whether a Koyeb dry-run request is allowed."""
+    return koyeb_validate_request(environment=environment)
+
+
+@mcp.tool()
+def koyeb_service_plan(
+    repo_full_name: str,
+    app_name: str,
+    service_name: str,
+    environment: str = "staging",
+    service_type: str = "web",
+    source: str = "github",
+):
+    """Generate a dry-run Koyeb service plan without executing provider writes."""
+    return koyeb_generate_service_plan(
+        repo_full_name=repo_full_name,
+        app_name=app_name,
+        service_name=service_name,
+        environment=environment,
+        service_type=service_type,
+        source=source,
     )
 
 
