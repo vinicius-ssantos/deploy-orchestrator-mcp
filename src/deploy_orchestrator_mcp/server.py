@@ -2,6 +2,7 @@ from fastmcp import FastMCP
 
 from deploy_orchestrator_mcp.analyzer import analyze_file_list
 from deploy_orchestrator_mcp.planner import generate_deployment_plan
+from deploy_orchestrator_mcp.providers import get_provider_capability, list_provider_capabilities
 
 mcp = FastMCP("deploy-orchestrator-mcp")
 
@@ -9,17 +10,24 @@ mcp = FastMCP("deploy-orchestrator-mcp")
 @mcp.tool()
 def provider_list():
     """List supported app and database providers."""
+    capabilities = list_provider_capabilities()
     return {
-        "app_providers": ["render", "railway", "fly", "koyeb", "coolify"],
-        "database_providers": [
-            "supabase",
-            "railway-postgres",
-            "render-postgres",
-            "koyeb-database",
-            "coolify-postgres",
-        ],
+        "app_providers": list(capabilities["app_providers"].keys()),
+        "database_providers": list(capabilities["database_providers"].keys()),
         "mode": "dry-run",
     }
+
+
+@mcp.tool()
+def provider_capabilities(provider: str | None = None):
+    """Return provider capabilities for one provider or all providers."""
+    if provider:
+        return {
+            "provider": provider,
+            "capabilities": get_provider_capability(provider),
+            "mode": "dry-run",
+        }
+    return list_provider_capabilities()
 
 
 @mcp.tool()
