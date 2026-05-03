@@ -67,3 +67,15 @@ def test_boolean_approval_flag_does_not_break_action_detection():
 
     assert requires_approval(plan) is True
     assert approval_required_actions(plan) == ["create database"]
+
+
+def test_explicit_approval_actions_take_precedence_over_legacy_metadata():
+    plan = {
+        "environment": "staging",
+        "steps": ["Review repository analysis"],
+        "approval_required": ["create service"],
+        "approval_required_actions": ["create database"],
+    }
+
+    assert requires_approval(plan) is True
+    assert approval_required_actions(plan) == ["create database"]
