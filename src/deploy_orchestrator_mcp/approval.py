@@ -40,8 +40,12 @@ def approval_required_actions(plan):
         if not normalized:
             continue
 
-        requires_approval = any(keyword in normalized for keyword in SENSITIVE_ACTION_KEYWORDS)
-        destructive = any(keyword in normalized for keyword in DESTRUCTIVE_ACTION_KEYWORDS)
+        requires_approval = any(
+            keyword in normalized for keyword in SENSITIVE_ACTION_KEYWORDS
+        )
+        destructive = any(
+            keyword in normalized for keyword in DESTRUCTIVE_ACTION_KEYWORDS
+        )
 
         if requires_approval or destructive:
             required.append(action)
