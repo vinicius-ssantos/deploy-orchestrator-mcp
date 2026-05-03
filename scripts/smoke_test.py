@@ -19,6 +19,7 @@ def main():
 
     analysis = analyze_file_list(files)
     plan = generate_deployment_plan(analysis, environment="staging")
+    blocked_plan = generate_deployment_plan(analysis, environment="production")
     capabilities = list_provider_capabilities()
     render = get_provider_capability("render")
     railway = get_provider_capability("railway")
