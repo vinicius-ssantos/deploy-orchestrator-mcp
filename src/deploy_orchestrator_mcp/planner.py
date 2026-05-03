@@ -1,3 +1,4 @@
+from deploy_orchestrator_mcp.approval import approval_required_actions, requires_approval
 from deploy_orchestrator_mcp.fly_provider import fly_generate_app_plan
 from deploy_orchestrator_mcp.policy import evaluate_policy
 from deploy_orchestrator_mcp.railway_provider import railway_generate_service_plan
@@ -88,7 +89,7 @@ def generate_deployment_plan(analysis, environment="staging", policy=None):
         "Run healthcheck after deployment",
     ]
 
-    approval_required = [
+    approval_actions = [
         "create service",
         "set environment variables",
         "trigger deployment",
@@ -96,7 +97,14 @@ def generate_deployment_plan(analysis, environment="staging", policy=None):
 
     if database_provider:
         steps.insert(4, "Provision database or backend provider")
-        approval_required.append("create database")
+        approval_actions.append("create database")
+
+    approval_plan = {
+        "environment": environment,
+        "steps": steps,
+        "approval_required_actions": approval_actions,
+    }
+    required_actions = approval_required_actions(approval_plan)
 
     risks = []
     if environment == "production":
@@ -114,7 +122,8 @@ def generate_deployment_plan(analysis, environment="staging", policy=None):
         "database_plan": database_plan,
         "policy_result": policy_result,
         "steps": steps,
-        "approval_required": approval_required,
+        "approval_required": requires_approval(approval_plan),
+        "approval_required_actions": required_actions,
         "risks": risks,
         "mode": "dry-run",
     }
