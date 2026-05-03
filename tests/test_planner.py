@@ -53,8 +53,28 @@ def test_policy_failure_is_reported_in_plan():
 
     assert plan["app_provider"]["provider"] == "fly"
     assert plan["policy_result"]["valid"] is False
+    assert plan["approval_required"] is True
+    assert "create service" in plan["approval_required_actions"]
+    assert "production deployment" not in plan["approval_required_actions"]
     assert plan["policy_result"]["errors"]
     assert "Repository policy validation failed" in plan["risks"]
+
+
+def test_valid_policy_can_still_require_approval():
+    analysis = analyze_file_list(["pyproject.toml", "README.md"])
+    policy = {
+        "allowed_environments": ["staging"],
+        "allowed_app_providers": ["render"],
+        "allowed_database_providers": ["supabase"],
+        "production": {"allowed": False, "requires_approval": True},
+    }
+
+    plan = generate_deployment_plan(analysis, environment="staging", policy=policy)
+
+    assert plan["policy_result"]["valid"] is True
+    assert plan["approval_required"] is True
+    assert plan["approval_required_actions"]
+    assert "Repository policy validation failed" not in plan["risks"]
 
 
 def test_production_policy_failure_is_reported_in_plan():
@@ -65,5 +85,6 @@ def test_production_policy_failure_is_reported_in_plan():
     assert plan["policy_result"]["valid"] is False
     assert plan["approval_required"] is True
     assert "production deployment" in plan["approval_required_actions"]
+    assert "create service" in plan["approval_required_actions"]
     assert "Production deployment requires explicit approval" in plan["risks"]
     assert "Repository policy validation failed" in plan["risks"]
