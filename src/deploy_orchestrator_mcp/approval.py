@@ -2,7 +2,7 @@ SENSITIVE_ACTION_KEYWORDS = (
     "create service",
     "create database",
     "provision database",
-    "set environment variables",
+    "environment variables",
     "trigger deployment",
     "apply migration",
     "rollback",
