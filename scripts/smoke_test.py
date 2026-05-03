@@ -19,6 +19,7 @@ def main():
 
     analysis = analyze_file_list(files)
     plan = generate_deployment_plan(analysis, environment="staging")
+    blocked_plan = generate_deployment_plan(analysis, environment="production")
     capabilities = list_provider_capabilities()
     render = get_provider_capability("render")
     railway = get_provider_capability("railway")
@@ -73,6 +74,13 @@ def main():
     assert plan["mode"] == "dry-run"
     assert plan["app_provider"]["provider"] == "render"
     assert plan["database_provider"]["provider"] == "supabase"
+    assert plan["policy_result"]["valid"] is True
+    assert plan["policy_result"]["environment"] == "staging"
+    assert plan["policy_result"]["app_provider"] == "render"
+    assert plan["policy_result"]["database_provider"] == "supabase"
+    assert blocked_plan["policy_result"]["valid"] is False
+    assert blocked_plan["policy_result"]["environment"] == "production"
+    assert "Repository policy validation failed" in blocked_plan["risks"]
     assert "render" in capabilities["app_providers"]
     assert "railway" in capabilities["app_providers"]
     assert "koyeb" in capabilities["app_providers"]
@@ -104,6 +112,7 @@ def main():
 
     print("smoke test passed")
     print(plan)
+    print(blocked_plan)
     print(render_plan)
     print(railway_plan)
     print(railway_postgres_plan)
