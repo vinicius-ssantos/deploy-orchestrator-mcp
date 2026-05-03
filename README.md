@@ -118,6 +118,55 @@ $env:PYTHONPATH="src"; .\.venv\Scripts\python.exe scripts\smoke_test.py
 .\.venv\Scripts\python.exe -m deploy_orchestrator_mcp.server
 ```
 
+## Policy and approval behavior
+
+Deployment plans include two separate safety signals:
+
+- `policy_result`: validates whether the requested environment and selected providers are allowed by repository policy.
+- `approval_required` and `approval_required_actions`: indicate whether the plan contains actions that require explicit user confirmation before execution.
+
+A policy failure blocks or flags the plan as invalid. It is reported in `policy_result` and adds the risk `Repository policy validation failed`.
+
+Approval requirements are different from policy validation. A plan can be policy-valid and still require approval because it creates or changes infrastructure. For example, staging plans may be allowed by policy while still requiring confirmation for service creation, database provisioning, environment variable writes or deployment triggers.
+
+Production deployments require explicit approval by default and are blocked by the default policy unless production is explicitly allowed.
+
+Sensitive actions that require approval include:
+
+- creating services or apps
+- creating databases or backend projects
+- setting environment variables
+- triggering deployments
+- applying migrations
+- rolling back deployments
+- configuring domains
+- scaling services
+
+Destructive actions always require explicit confirmation, including deleting apps or databases, resetting databases, restoring backups, running production write SQL or exposing a database publicly.
+
+Example deployment-plan safety metadata:
+
+```python
+{
+    "policy_result": {
+        "valid": True,
+        "environment": "staging",
+        "app_provider": "render",
+        "database_provider": "supabase",
+        "errors": [],
+    },
+    "approval_required": True,
+    "approval_required_actions": [
+        "create service",
+        "set environment variables",
+        "trigger deployment",
+        "create database",
+    ],
+    "risks": [],
+    "mode": "dry-run",
+}
+```
+
 ## Safety posture
 
 The server starts in dry-run/read-only mode.
