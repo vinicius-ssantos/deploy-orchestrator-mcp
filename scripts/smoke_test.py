@@ -74,6 +74,13 @@ def main():
     assert plan["mode"] == "dry-run"
     assert plan["app_provider"]["provider"] == "render"
     assert plan["database_provider"]["provider"] == "supabase"
+    assert plan["policy_result"]["valid"] is True
+    assert plan["policy_result"]["environment"] == "staging"
+    assert plan["policy_result"]["app_provider"] == "render"
+    assert plan["policy_result"]["database_provider"] == "supabase"
+    assert blocked_plan["policy_result"]["valid"] is False
+    assert blocked_plan["policy_result"]["environment"] == "production"
+    assert "Repository policy validation failed" in blocked_plan["risks"]
     assert "render" in capabilities["app_providers"]
     assert "railway" in capabilities["app_providers"]
     assert "koyeb" in capabilities["app_providers"]
