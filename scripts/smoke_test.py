@@ -112,6 +112,7 @@ def main():
 
     print("smoke test passed")
     print(plan)
+    print(blocked_plan)
     print(render_plan)
     print(railway_plan)
     print(railway_postgres_plan)
