@@ -28,9 +28,21 @@ def _plan_environment(plan):
     return str(plan.get("environment", "")).strip().lower()
 
 
+def _approval_action_metadata(plan):
+    explicit_actions = plan.get("approval_required_actions")
+    if explicit_actions is not None:
+        return list(explicit_actions)
+
+    legacy_actions = plan.get("approval_required")
+    if isinstance(legacy_actions, list):
+        return list(legacy_actions)
+
+    return []
+
+
 def approval_required_actions(plan):
     """Return plan actions that require explicit user confirmation."""
-    actions = list(plan.get("approval_required") or [])
+    actions = _approval_action_metadata(plan)
     steps = list(plan.get("steps") or [])
     all_actions = actions + steps
 
