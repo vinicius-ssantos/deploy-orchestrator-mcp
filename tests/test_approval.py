@@ -55,3 +55,15 @@ def test_destructive_actions_require_approval():
 
     assert requires_approval(plan) is True
     assert approval_required_actions(plan) == ["Delete app"]
+
+
+def test_boolean_approval_flag_does_not_break_action_detection():
+    plan = {
+        "environment": "staging",
+        "steps": ["Review repository analysis"],
+        "approval_required": True,
+        "approval_required_actions": ["create database"],
+    }
+
+    assert requires_approval(plan) is True
+    assert approval_required_actions(plan) == ["create database"]
