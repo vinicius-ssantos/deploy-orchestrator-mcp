@@ -51,5 +51,5 @@ class InMemoryAuditLog:
         self._events.append(redact(event))
         return self._events[-1]
 
-    def list(+ self):
+    def list(self):
         return list(self._events)
