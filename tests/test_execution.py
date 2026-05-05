@@ -57,7 +57,7 @@ def test_policy_failure_blocks_execution_even_with_approval():
 def test_production_execution_remains_blocked_by_default():
     decision = evaluate_execution_gate(
         base_plan(environment="production"),
-        approval=APROVAL_TOKEN,
+        approval=APPROVAL_TOKEN,
         mode="execute",
     )
 
