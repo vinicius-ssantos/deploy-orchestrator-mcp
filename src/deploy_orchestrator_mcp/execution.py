@@ -61,8 +61,12 @@ def evaluate_execution_gate(plan, approval=None, mode=None):
                 "mode": requested_mode,
                 "environment": plan.get("environment"),
                 "approval_required": plan.get("approval_required", False),
-                "approval_required_actions": plan.get("approval_required_actions", []),
-                "policy_valid": (plan.get("policy_result") or {}).get("valid", True),
+                "approval_required_actions": plan.get(
+                    "approval_required_actions", []
+                ),
+                "policy_valid": (plan.get("policy_result") or {}).get(
+                    "valid", True
+                ),
                 "decision": decision,
             },
         ),
