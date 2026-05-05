@@ -54,15 +54,28 @@ def test_policy_failure_blocks_execution_even_with_approval():
     assert decision["reasons"] == ["policy validation failed"]
 
 
-def test_production_execution_remains_blocked_by_default():
+def test_production_execution_requires_approval():
+    decision = evaluate_execution_gate(
+        base_plan(environment="production"),
+        mode="execute",
+    )
+
+    assert decision["allowed"] is False
+    assert decision["reasons"] == [
+        "production execution requires explicit approval",
+        "approval required",
+    ]
+
+
+def test_approved_policy_valid_production_execution_is_allowed():
     decision = evaluate_execution_gate(
         base_plan(environment="production"),
         approval=APPROVAL_TOKEN,
         mode="execute",
     )
 
-    assert decision["allowed"] is False
-    assert decision["reasons"] == ["production execution requires explicit approval"]
+    assert decision["allowed"] is True
+    assert decision["reasons"] == []
 
 
 def test_non_approval_plan_can_execute_when_policy_is_valid():
