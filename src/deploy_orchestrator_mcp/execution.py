@@ -41,7 +41,7 @@ def evaluate_execution_gate(plan, approval=None, mode=None):
     if not _policy_valid(plan):
         reasons.append("policy validation failed")
 
-    if _is_production(plan):
+    if _is_production(plan) and not _approval_present(approval):
         reasons.append("production execution requires explicit approval")
 
     if plan.get("approval_required") and not _approval_present(approval):
