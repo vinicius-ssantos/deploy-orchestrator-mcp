@@ -26,11 +26,17 @@
 
 ## Phase 2 — Render provider (real API)
 
-- [ ] Validate Render credentials (read-only)
-- [ ] List services
-- [ ] Trigger staging deploy with approval
-- [ ] Read deploy status and logs
-- [ ] Run healthcheck after deploy
+- [x] Validate Render credentials (read-only)
+- [x] List services
+- [x] Trigger staging deploy with approval
+- [x] Read deploy status
+- [x] Run healthcheck after deploy
+
+Notes:
+
+- Implemented in `render_api.py` and exposed via FastMCP tools in `server.py`.
+- Tests mock the Render API with `httpx.MockTransport`; CI does not call Render.
+- Runtime/build logs are still provider-specific follow-up work and should be tracked separately if needed.
 
 ## Phase 3 — Railway and Supabase (real API)
 
