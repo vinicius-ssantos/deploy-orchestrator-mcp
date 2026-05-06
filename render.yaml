@@ -4,6 +4,12 @@ services:
     runtime: docker
     plan: free
     envVars:
+      - key: MCP_TRANSPORT
+        value: "http"
+      - key: PORT
+        value: "8000"
+      - key: MCP_SERVER_API_KEY
+        generateValue: true
       - key: MCP_READ_ONLY
         value: "true"
       - key: MCP_REQUIRE_CONFIRMATION

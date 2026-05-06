@@ -1,4 +1,3 @@
-import os
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -6,16 +5,16 @@ from typing import Any
 import httpx
 
 from deploy_orchestrator_mcp.audit import create_audit_event
+from deploy_orchestrator_mcp.credentials import get_credential
 from deploy_orchestrator_mcp.execution import evaluate_execution_gate
 from deploy_orchestrator_mcp.redaction import redact
 
 RENDER_API_BASE_URL = "https://api.render.com/v1"
-RENDER_API_KEY_ENV = "RENDER_API_KEY"
 FINAL_DEPLOY_STATUSES = {"live", "deactivated", "build_failed", "update_failed", "canceled"}
 
 
 def _render_api_key(api_key: str | None = None) -> str | None:
-    return api_key or os.getenv(RENDER_API_KEY_ENV)
+    return api_key or get_credential("render")
 
 
 def _headers(api_key: str) -> dict[str, str]:
@@ -94,7 +93,7 @@ def _missing_api_key_result(operation: str) -> dict[str, Any]:
         "provider": "render",
         "valid": False,
         "mode": "read-only",
-        "errors": [f"{RENDER_API_KEY_ENV} is not configured"],
+        "errors": ["Render API key is not configured (use credentials_set or set RENDER_API_KEY env var)"],
         "audit_event": create_audit_event(
             "render.api.blocked",
             {

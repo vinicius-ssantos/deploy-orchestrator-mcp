@@ -1,11 +1,21 @@
+import os
+
 from fastmcp import FastMCP
 
 from deploy_orchestrator_mcp.analyzer import analyze_file_list
+from deploy_orchestrator_mcp.auth import auth_status, validate_bearer_token
 from deploy_orchestrator_mcp.config import get_settings
 from deploy_orchestrator_mcp.coolify_provider import (
     coolify_generate_app_plan,
     coolify_generate_database_plan,
     coolify_validate_request,
+)
+from deploy_orchestrator_mcp.credentials import (
+    clear_credential,
+    credential_status,
+    get_credential,
+    known_providers,
+    set_credential,
 )
 from deploy_orchestrator_mcp.fly_provider import fly_generate_app_plan, fly_validate_request
 from deploy_orchestrator_mcp.koyeb_provider import koyeb_generate_service_plan, koyeb_validate_request
@@ -36,6 +46,57 @@ from deploy_orchestrator_mcp.supabase_provider import (
 mcp = FastMCP("deploy-orchestrator-mcp")
 
 
+# ---------------------------------------------------------------------------
+# Auth & server info
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def server_auth_status():
+    """Return current server authentication configuration (no secrets exposed)."""
+    return auth_status()
+
+
+# ---------------------------------------------------------------------------
+# Credential management
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def credentials_status():
+    """List which providers have credentials configured (values are never returned)."""
+    return {
+        "providers": credential_status(),
+        "known_providers": known_providers(),
+    }
+
+
+@mcp.tool()
+def credentials_set(provider: str, token: str):
+    """Set or update a provider credential at runtime.
+
+    Supported providers: render, railway, fly, koyeb, coolify, supabase.
+    Extra keys: coolify_base_url, supabase_org_id.
+    """
+    try:
+        set_credential(provider, token)
+        return {"ok": True, "provider": provider, "message": f"Credential for '{provider}' updated."}
+    except ValueError as exc:
+        return {"ok": False, "provider": provider, "error": str(exc)}
+
+
+@mcp.tool()
+def credentials_clear(provider: str):
+    """Remove a provider credential from the runtime store."""
+    clear_credential(provider)
+    return {"ok": True, "provider": provider, "message": f"Credential for '{provider}' cleared."}
+
+
+# ---------------------------------------------------------------------------
+# Safety & policy
+# ---------------------------------------------------------------------------
+
+
 @mcp.tool()
 def safety_settings():
     """Return current safety settings without exposing secrets."""
@@ -56,6 +117,11 @@ def policy_evaluate(
         app_provider=app_provider,
         database_provider=database_provider,
     )
+
+
+# ---------------------------------------------------------------------------
+# Providers
+# ---------------------------------------------------------------------------
 
 
 @mcp.tool()
@@ -81,6 +147,11 @@ def provider_capabilities(provider: str | None = None):
     return list_provider_capabilities()
 
 
+# ---------------------------------------------------------------------------
+# Repo & plan
+# ---------------------------------------------------------------------------
+
+
 @mcp.tool()
 def repo_analyze(files: list[str]):
     """Analyze repository file paths and detect runtime/deployment needs."""
@@ -96,6 +167,11 @@ def deploy_generate_plan(
     """Generate a dry-run deployment plan from repository file paths."""
     analysis = analyze_file_list(files)
     return generate_deployment_plan(analysis, environment=environment, policy=policy)
+
+
+# ---------------------------------------------------------------------------
+# Render
+# ---------------------------------------------------------------------------
 
 
 @mcp.tool()
@@ -166,6 +242,11 @@ def render_healthcheck(url: str, expected_status: int = 200, timeout_seconds: fl
     )
 
 
+# ---------------------------------------------------------------------------
+# Railway
+# ---------------------------------------------------------------------------
+
+
 @mcp.tool()
 def railway_validate(environment: str = "staging"):
     """Validate whether a Railway dry-run request is allowed."""
@@ -194,6 +275,11 @@ def railway_postgres_plan(project_name: str, environment: str = "staging"):
     return railway_generate_postgres_plan(project_name=project_name, environment=environment)
 
 
+# ---------------------------------------------------------------------------
+# Fly
+# ---------------------------------------------------------------------------
+
+
 @mcp.tool()
 def fly_validate(environment: str = "staging"):
     """Validate whether a Fly dry-run request is allowed."""
@@ -214,6 +300,11 @@ def fly_app_plan(
         environment=environment,
         needs_volume=needs_volume,
     )
+
+
+# ---------------------------------------------------------------------------
+# Koyeb
+# ---------------------------------------------------------------------------
 
 
 @mcp.tool()
@@ -240,6 +331,11 @@ def koyeb_service_plan(
         service_type=service_type,
         source=source,
     )
+
+
+# ---------------------------------------------------------------------------
+# Coolify
+# ---------------------------------------------------------------------------
 
 
 @mcp.tool()
@@ -286,6 +382,11 @@ def coolify_database_plan(
     )
 
 
+# ---------------------------------------------------------------------------
+# Supabase
+# ---------------------------------------------------------------------------
+
+
 @mcp.tool()
 def supabase_validate(environment: str = "staging"):
     """Validate whether a Supabase dry-run request is allowed."""
@@ -308,5 +409,47 @@ def supabase_project_plan(
     )
 
 
+# ---------------------------------------------------------------------------
+# Entrypoint
+# ---------------------------------------------------------------------------
+
+
+def _make_asgi_app():
+    """Wrap the FastMCP HTTP app with a simple Bearer API key middleware."""
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.responses import JSONResponse
+
+    class _BearerAuthMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            from deploy_orchestrator_mcp.auth import is_auth_enabled, validate_bearer_token
+
+            if not is_auth_enabled():
+                return await call_next(request)
+
+            auth_header = request.headers.get("Authorization", "")
+            if not auth_header.startswith("Bearer "):
+                return JSONResponse(
+                    {"error": "unauthorized", "detail": "Missing or invalid Authorization header"},
+                    status_code=401,
+                )
+            token = auth_header[len("Bearer "):]
+            if not validate_bearer_token(token):
+                return JSONResponse(
+                    {"error": "unauthorized", "detail": "Invalid API key"},
+                    status_code=401,
+                )
+            return await call_next(request)
+
+    app = mcp.http_app(path="/mcp")
+    app.add_middleware(_BearerAuthMiddleware)
+    return app
+
+
 if __name__ == "__main__":
-    mcp.run(transport="stdio")
+    transport = os.getenv("MCP_TRANSPORT", "stdio")
+    if transport == "http":
+        import uvicorn
+        port = int(os.getenv("PORT", "8000"))
+        uvicorn.run(_make_asgi_app(), host="0.0.0.0", port=port)
+    else:
+        mcp.run(transport="stdio")
