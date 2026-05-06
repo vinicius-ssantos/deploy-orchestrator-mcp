@@ -37,6 +37,12 @@ Notes:
 - Implemented in `render_api.py` and exposed via FastMCP tools in `server.py`.
 - Tests mock the Render API with `httpx.MockTransport`; CI does not call Render.
 - Runtime/build logs are still provider-specific follow-up work and should be tracked separately if needed.
+- Operational validation completed on 2026-05-06:
+  - `render_validate_credentials` returned `valid=true`
+  - `render_list_services` returned `ok=true`
+  - `render_deploy_staging` triggered an API deploy with approval gate
+  - `render_get_deploy_status` reached `live`
+  - `render_healthcheck` returned `200` on `/healthz`
 
 ## Phase 3 — Railway and Supabase (real API)
 
