@@ -25,10 +25,12 @@ from deploy_orchestrator_mcp.providers import get_provider_capability, list_prov
 from deploy_orchestrator_mcp.railway_api import (
     railway_deploy as railway_api_deploy,
     railway_get_deploy_status as railway_api_get_deploy_status,
+    railway_get_postgres_status as railway_api_get_postgres_status,
     railway_get_project as railway_api_get_project,
     railway_healthcheck as railway_api_healthcheck,
     railway_list_deployments as railway_api_list_deployments,
     railway_list_projects as railway_api_list_projects,
+    railway_provision_postgres as railway_api_provision_postgres,
     railway_validate_credentials as railway_api_validate_credentials,
 )
 from deploy_orchestrator_mcp.railway_provider import (
@@ -330,6 +332,28 @@ def railway_get_deploy_status(
 def railway_healthcheck(url: str, expected_status: int = 200, timeout_seconds: float = 10.0):
     """Run an HTTP healthcheck against a Railway service URL."""
     return railway_api_healthcheck(url, expected_status=expected_status, timeout_seconds=timeout_seconds)
+
+
+@mcp.tool()
+def railway_provision_postgres(
+    project_id: str,
+    environment_id: str,
+    name: str = "postgres",
+    approval: str | bool | None = None,
+):
+    """Provision a Railway PostgreSQL database with approval gate (requires approval='APPROVED')."""
+    return railway_api_provision_postgres(
+        project_id,
+        environment_id,
+        name=name,
+        approval=approval,
+    )
+
+
+@mcp.tool()
+def railway_get_postgres_status(project_id: str, environment_id: str, service_id: str):
+    """Get Railway Postgres connection status — secret values are never returned."""
+    return railway_api_get_postgres_status(project_id, environment_id, service_id)
 
 
 @mcp.tool()
