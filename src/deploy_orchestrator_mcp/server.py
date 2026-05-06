@@ -22,6 +22,13 @@ from deploy_orchestrator_mcp.koyeb_provider import koyeb_generate_service_plan, 
 from deploy_orchestrator_mcp.planner import generate_deployment_plan
 from deploy_orchestrator_mcp.policy import evaluate_policy
 from deploy_orchestrator_mcp.providers import get_provider_capability, list_provider_capabilities
+from deploy_orchestrator_mcp.railway_api import (
+    railway_deploy as railway_api_deploy,
+    railway_get_project as railway_api_get_project,
+    railway_list_deployments as railway_api_list_deployments,
+    railway_list_projects as railway_api_list_projects,
+    railway_validate_credentials as railway_api_validate_credentials,
+)
 from deploy_orchestrator_mcp.railway_provider import (
     railway_generate_postgres_plan,
     railway_generate_service_plan,
@@ -267,6 +274,40 @@ def railway_service_plan(
         environment=environment,
         needs_postgres=needs_postgres,
     )
+
+
+@mcp.tool()
+def railway_validate_credentials():
+    """Validate Railway API token using a read-only query."""
+    return railway_api_validate_credentials()
+
+
+@mcp.tool()
+def railway_list_projects():
+    """List all Railway projects for the authenticated account."""
+    return railway_api_list_projects()
+
+
+@mcp.tool()
+def railway_get_project(project_id: str):
+    """Get a Railway project with its services and environments."""
+    return railway_api_get_project(project_id)
+
+
+@mcp.tool()
+def railway_list_deployments(service_id: str, environment_id: str):
+    """List recent deployments for a Railway service."""
+    return railway_api_list_deployments(service_id, environment_id)
+
+
+@mcp.tool()
+def railway_deploy_service(
+    service_id: str,
+    environment_id: str,
+    approval: str | bool | None = None,
+):
+    """Trigger a Railway deployment after approval gate validation."""
+    return railway_api_deploy(service_id, environment_id, approval=approval)
 
 
 @mcp.tool()
