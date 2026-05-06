@@ -33,6 +33,7 @@ src/deploy_orchestrator_mcp/
   redaction.py          Secret and sensitive value redaction
   providers.py          Provider capabilities registry
   render_provider.py    Render dry-run plan generator
+  render_api.py         Render real API client and execution tools
   railway_provider.py   Railway dry-run plan generator
   fly_provider.py       Fly.io dry-run plan generator
   koyeb_provider.py     Koyeb dry-run plan generator
@@ -58,7 +59,8 @@ src/deploy_orchestrator_mcp/
 
 4. Provider tools (render_*, railway_*, fly_*, koyeb_*, coolify_*, supabase_*)
       dry-run: return structured plan, no API calls
-      execute mode (future): call provider APIs with approval gate
+      Render real API: credentials, services, staging deploy, status, healthcheck
+      other execute modes (future): call provider APIs with approval gate
 ```
 
 ## Safety layers
@@ -111,10 +113,11 @@ All sensitive actions require explicit user approval.
 |---|---|---|
 | Phase 0 | Scaffold | Complete |
 | Phase 1 | Dry-run planning (all providers) | Complete |
-| Phase 2 | Render real API | Not started |
+| Phase 2 | Render real API | Complete |
 | Phase 3 | Railway + Supabase real API | Not started |
 | Phase 4 | Koyeb, Fly, Coolify real API | Not started |
 | Phase 5 | Production controls | Not started |
 
-All tools currently operate in dry-run mode only.
-No provider API calls are made in the current implementation.
+Most provider tools still operate in dry-run mode only.
+Render now has real API tools for credential validation, service listing, staging deploy, deploy status and healthcheck.
+Render deploy execution is gated by `evaluate_execution_gate()` and requires `approval="APPROVED"`.
