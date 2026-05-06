@@ -4,10 +4,12 @@ import pytest
 from deploy_orchestrator_mcp.railway_api import (
     railway_deploy,
     railway_get_deploy_status,
+    railway_get_postgres_status,
     railway_get_project,
     railway_healthcheck,
     railway_list_deployments,
     railway_list_projects,
+    railway_provision_postgres,
     railway_validate_credentials,
 )
 
@@ -318,3 +320,128 @@ def test_healthcheck_connection_error():
 
     assert result["healthy"] is False
     assert len(result["errors"]) > 0
+
+
+# ---------------------------------------------------------------------------
+# provision_postgres
+# ---------------------------------------------------------------------------
+
+
+def test_provision_postgres_blocked_without_approval(monkeypatch):
+    monkeypatch.setenv("RAILWAY_TOKEN", "tok_test")
+    result = railway_provision_postgres("proj-1", "env-1", approval=None)
+    assert result["provisioned"] is False
+    assert result["gate"]["allowed"] is False
+
+
+def test_provision_postgres_ok(monkeypatch):
+    monkeypatch.setenv("RAILWAY_TOKEN", "tok_test")
+
+    def handler(request):
+        return httpx.Response(200, json={
+            "data": {
+                "databaseCreate": {
+                    "id": "db-123",
+                    "name": "postgres",
+                    "databaseType": "POSTGRES",
+                    "projectId": "proj-1",
+                }
+            }
+        })
+
+    with _mock_client(handler) as client:
+        result = railway_provision_postgres("proj-1", "env-1", approval="APPROVED", client=client)
+
+    assert result["provisioned"] is True
+    assert result["database_id"] == "db-123"
+    assert result["database_type"] == "POSTGRES"
+    assert result["gate"]["allowed"] is True
+
+
+def test_provision_postgres_missing_token(monkeypatch):
+    monkeypatch.delenv("RAILWAY_TOKEN", raising=False)
+    result = railway_provision_postgres("proj-1", "env-1", approval="APPROVED")
+    assert result["provisioned"] is False
+    assert any("not configured" in e for e in result["errors"])
+
+
+def test_provision_postgres_api_error(monkeypatch):
+    monkeypatch.setenv("RAILWAY_TOKEN", "tok_test")
+
+    def handler(request):
+        return httpx.Response(200, json={"errors": [{"message": "project not found"}]})
+
+    with _mock_client(handler) as client:
+        result = railway_provision_postgres("bad-proj", "env-1", approval="APPROVED", client=client)
+
+    assert result["provisioned"] is False
+    assert "errors" in result
+
+
+# ---------------------------------------------------------------------------
+# get_postgres_status
+# ---------------------------------------------------------------------------
+
+
+def test_get_postgres_status_connection_configured(monkeypatch):
+    monkeypatch.setenv("RAILWAY_TOKEN", "tok_test")
+
+    def handler(request):
+        return httpx.Response(200, json={
+            "data": {
+                "variables": {
+                    "DATABASE_URL": "postgresql://user:secret@host:5432/db",
+                    "PGPASSWORD": "secret",
+                    "PGHOST": "roundhouse.proxy.rlwy.net",
+                    "PGPORT": "12345",
+                    "PGDATABASE": "railway",
+                }
+            }
+        })
+
+    with _mock_client(handler) as client:
+        result = railway_get_postgres_status("proj-1", "env-1", "svc-1", client=client)
+
+    assert result["ok"] is True
+    assert result["connection_configured"] is True
+    # Secret keys are listed but values must not appear
+    assert "DATABASE_URL" in result["connection_keys_found"]
+    assert "PGPASSWORD" in result["connection_keys_found"]
+    # Safe vars are returned
+    assert result["variables"].get("PGHOST") == "roundhouse.proxy.rlwy.net"
+    assert result["variables"].get("PGPORT") == "12345"
+    # Secret values must not leak anywhere in result
+    assert "secret" not in str(result)
+    assert "postgresql://" not in str(result)
+
+
+def test_get_postgres_status_not_configured(monkeypatch):
+    monkeypatch.setenv("RAILWAY_TOKEN", "tok_test")
+
+    def handler(request):
+        return httpx.Response(200, json={"data": {"variables": {}}})
+
+    with _mock_client(handler) as client:
+        result = railway_get_postgres_status("proj-1", "env-1", "svc-1", client=client)
+
+    assert result["ok"] is True
+    assert result["connection_configured"] is False
+    assert result["connection_keys_found"] == []
+
+
+def test_get_postgres_status_missing_token(monkeypatch):
+    monkeypatch.delenv("RAILWAY_TOKEN", raising=False)
+    result = railway_get_postgres_status("proj-1", "env-1", "svc-1")
+    assert result["valid"] is False
+
+
+def test_get_postgres_status_api_error(monkeypatch):
+    monkeypatch.setenv("RAILWAY_TOKEN", "tok_test")
+
+    def handler(request):
+        return httpx.Response(200, json={"errors": [{"message": "not found"}]})
+
+    with _mock_client(handler) as client:
+        result = railway_get_postgres_status("bad-proj", "env-1", "svc-1", client=client)
+
+    assert result["ok"] is False

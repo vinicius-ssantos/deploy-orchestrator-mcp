@@ -125,6 +125,50 @@ mutation ServiceInstanceRedeploy($serviceId: String!, $environmentId: String!) {
 
 FINAL_DEPLOY_STATUSES = {"SUCCESS", "FAILED", "CRASHED", "REMOVED", "SKIPPED"}
 
+_Q_VARIABLES = """
+query Variables($projectId: String!, $environmentId: String!, $serviceId: String) {
+  variables(projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId)
+}
+"""
+
+_M_DATABASE_CREATE = """
+mutation DatabaseCreate($input: DatabaseCreateInput!) {
+  databaseCreate(input: $input) {
+    id
+    name
+    databaseType
+    projectId
+  }
+}
+"""
+
+_M_DATABASE_DELETE = """
+mutation DatabaseDelete($id: String!) {
+  databaseDelete(id: $id)
+}
+"""
+
+_Q_DATABASE = """
+query Database($id: String!) {
+  database(id: $id) {
+    id
+    name
+    databaseType
+    projectId
+  }
+}
+"""
+
+# Keys that carry connection secrets — values must never appear in output.
+_POSTGRES_SECRET_KEYS = {
+    "DATABASE_URL",
+    "DATABASE_PRIVATE_URL",
+    "PGPASSWORD",
+    "POSTGRES_PASSWORD",
+    "PGUSER",
+    "POSTGRES_USER",
+}
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -558,3 +602,145 @@ def railway_healthcheck(
     finally:
         if owns_client:
             http_client.close()
+
+
+# ---------------------------------------------------------------------------
+# Railway Postgres
+# ---------------------------------------------------------------------------
+
+
+def railway_provision_postgres(
+    project_id: str,
+    environment_id: str,
+    *,
+    name: str = "postgres",
+    approval: str | bool | None = None,
+    token: str | None = None,
+    client: httpx.Client | None = None,
+    plan: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Provision a Railway PostgreSQL database with approval gate.
+
+    Uses the Railway databaseCreate mutation. The operation is irreversible
+    (creates a billable resource) so requires explicit approval.
+    """
+    deploy_plan = plan or {
+        "provider": "railway",
+        "environment": "staging",
+        "mode": "execute",
+        "approval_required": True,
+        "approval_required_actions": ["provision Railway PostgreSQL database"],
+        "project_id": project_id,
+        "environment_id": environment_id,
+    }
+    gate = evaluate_execution_gate(deploy_plan, approval=approval, mode="execute")
+    if not gate["allowed"]:
+        return redact({
+            "provider": "railway",
+            "provisioned": False,
+            "database_id": None,
+            "gate": gate,
+            "audit_event": create_audit_event(
+                "railway.postgres.blocked",
+                {
+                    "provider": "railway",
+                    "operation": "provision_postgres",
+                    "project_id": project_id,
+                    "reasons": gate.get("reasons", []),
+                },
+            ),
+        })
+
+    resolved = _railway_token(token)
+    if not resolved:
+        result = _missing_token_result("provision_postgres")
+        result.update({"provisioned": False, "database_id": None, "gate": gate})
+        return redact(result)
+
+    data, audit_event = _gql(
+        _M_DATABASE_CREATE,
+        {
+            "input": {
+                "projectId": project_id,
+                "environmentId": environment_id,
+                "type": "POSTGRES",
+                "name": name,
+            }
+        },
+        token=resolved,
+        client=client,
+        operation="provision_postgres",
+    )
+
+    if isinstance(data, dict) and data.get("error"):
+        return redact({
+            "provider": "railway",
+            "provisioned": False,
+            "database_id": None,
+            "gate": gate,
+            "errors": [data],
+            "audit_event": audit_event,
+        })
+
+    db = data.get("databaseCreate") or {}
+    return redact({
+        "provider": "railway",
+        "provisioned": True,
+        "database_id": db.get("id"),
+        "database_name": db.get("name"),
+        "database_type": db.get("databaseType"),
+        "project_id": db.get("projectId"),
+        "gate": gate,
+        "audit_event": audit_event,
+    })
+
+
+def railway_get_postgres_status(
+    project_id: str,
+    environment_id: str,
+    service_id: str,
+    *,
+    token: str | None = None,
+    client: httpx.Client | None = None,
+) -> dict[str, Any]:
+    """Get Railway Postgres connection status.
+
+    Returns which connection variables are present without exposing their values.
+    Secret keys (DATABASE_URL, PGPASSWORD, etc.) are listed but never returned.
+    """
+    resolved = _railway_token(token)
+    if not resolved:
+        return _missing_token_result("get_postgres_status")
+
+    data, audit_event = _gql(
+        _Q_VARIABLES,
+        {"projectId": project_id, "environmentId": environment_id, "serviceId": service_id},
+        token=resolved,
+        client=client,
+        operation="get_postgres_status",
+    )
+
+    if isinstance(data, dict) and data.get("error"):
+        return redact({
+            "provider": "railway",
+            "ok": False,
+            "errors": [data],
+            "audit_event": audit_event,
+        })
+
+    variables: dict[str, Any] = data.get("variables") or {}
+    all_keys = list(variables.keys())
+    connection_keys_found = [k for k in all_keys if k in _POSTGRES_SECRET_KEYS]
+    safe_vars = {k: v for k, v in variables.items() if k not in _POSTGRES_SECRET_KEYS}
+
+    return redact({
+        "provider": "railway",
+        "ok": True,
+        "project_id": project_id,
+        "environment_id": environment_id,
+        "service_id": service_id,
+        "connection_configured": len(connection_keys_found) > 0,
+        "connection_keys_found": connection_keys_found,
+        "variables": safe_vars,
+        "audit_event": audit_event,
+    })
