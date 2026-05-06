@@ -3,7 +3,9 @@ import pytest
 
 from deploy_orchestrator_mcp.railway_api import (
     railway_deploy,
+    railway_get_deploy_status,
     railway_get_project,
+    railway_healthcheck,
     railway_list_deployments,
     railway_list_projects,
     railway_validate_credentials,
@@ -191,3 +193,128 @@ def test_deploy_missing_token(monkeypatch):
     result = railway_deploy("svc-1", "env-1", approval="APPROVED")
     assert result["triggered"] is False
     assert any("not configured" in e for e in result["errors"])
+
+
+# ---------------------------------------------------------------------------
+# get_deploy_status
+# ---------------------------------------------------------------------------
+
+
+def test_get_deploy_status_ok(monkeypatch):
+    monkeypatch.setenv("RAILWAY_TOKEN", "tok_test")
+
+    def handler(request):
+        return httpx.Response(200, json={
+            "data": {
+                "deployment": {
+                    "id": "dep-1",
+                    "status": "SUCCESS",
+                    "url": "https://app.up.railway.app",
+                    "createdAt": "2024-01-01",
+                    "updatedAt": "2024-01-01",
+                }
+            }
+        })
+
+    with _mock_client(handler) as client:
+        result = railway_get_deploy_status("dep-1", client=client)
+
+    assert result["ok"] is True
+    assert result["status"] == "SUCCESS"
+    assert result["complete"] is True
+    assert result["attempts"] == 1
+
+
+def test_get_deploy_status_in_progress(monkeypatch):
+    monkeypatch.setenv("RAILWAY_TOKEN", "tok_test")
+
+    def handler(request):
+        return httpx.Response(200, json={
+            "data": {
+                "deployment": {
+                    "id": "dep-2",
+                    "status": "BUILDING",
+                    "url": None,
+                    "createdAt": "2024-01-01",
+                    "updatedAt": "2024-01-01",
+                }
+            }
+        })
+
+    with _mock_client(handler) as client:
+        result = railway_get_deploy_status("dep-2", client=client)
+
+    assert result["ok"] is True
+    assert result["complete"] is False
+
+
+def test_get_deploy_status_missing_token(monkeypatch):
+    monkeypatch.delenv("RAILWAY_TOKEN", raising=False)
+    result = railway_get_deploy_status("dep-1")
+    assert result["valid"] is False
+
+
+def test_get_deploy_status_api_error(monkeypatch):
+    monkeypatch.setenv("RAILWAY_TOKEN", "tok_test")
+
+    def handler(request):
+        return httpx.Response(200, json={"errors": [{"message": "not found"}]})
+
+    with _mock_client(handler) as client:
+        result = railway_get_deploy_status("dep-bad", client=client)
+
+    assert result["ok"] is False
+
+
+# ---------------------------------------------------------------------------
+# healthcheck
+# ---------------------------------------------------------------------------
+
+
+def test_healthcheck_healthy(monkeypatch):
+    def handler(request):
+        return httpx.Response(200)
+
+    with _mock_client(handler) as client:
+        result = railway_healthcheck("https://app.up.railway.app", client=client)
+
+    assert result["healthy"] is True
+    assert result["status_code"] == 200
+
+
+def test_healthcheck_unhealthy(monkeypatch):
+    def handler(request):
+        return httpx.Response(503)
+
+    with _mock_client(handler) as client:
+        result = railway_healthcheck("https://app.up.railway.app", client=client)
+
+    assert result["healthy"] is False
+    assert result["status_code"] == 503
+
+
+def test_healthcheck_custom_expected_status(monkeypatch):
+    def handler(request):
+        return httpx.Response(302)
+
+    with _mock_client(handler) as client:
+        result = railway_healthcheck("https://app.up.railway.app", expected_status=302, client=client)
+
+    assert result["healthy"] is True
+
+
+def test_healthcheck_invalid_url():
+    result = railway_healthcheck("not-a-url")
+    assert result["healthy"] is False
+    assert "http" in result["errors"][0]
+
+
+def test_healthcheck_connection_error():
+    def handler(request):
+        raise httpx.ConnectError("connection refused")
+
+    with _mock_client(handler) as client:
+        result = railway_healthcheck("https://app.up.railway.app", client=client)
+
+    assert result["healthy"] is False
+    assert len(result["errors"]) > 0

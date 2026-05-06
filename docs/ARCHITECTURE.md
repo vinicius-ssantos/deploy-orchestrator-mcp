@@ -114,10 +114,25 @@ All sensitive actions require explicit user approval.
 | Phase 0 | Scaffold | Complete |
 | Phase 1 | Dry-run planning (all providers) | Complete |
 | Phase 2 | Render real API | Complete |
-| Phase 3 | Railway + Supabase real API | Not started |
-| Phase 4 | Koyeb, Fly, Coolify real API | Not started |
+| Phase 3 | Railway real API | Complete |
+| Phase 3b | Supabase real API | Not started |
+| Phase 4 | Fly.io, Koyeb, Coolify real API | Not started |
 | Phase 5 | Production controls | Not started |
 
-Most provider tools still operate in dry-run mode only.
-Render now has real API tools for credential validation, service listing, staging deploy, deploy status and healthcheck.
-Render deploy execution is gated by `evaluate_execution_gate()` and requires `approval="APPROVED"`.
+### Railway operational sequence
+
+```text
+railway_validate_credentials          → confirm token is valid
+railway_list_projects                 → discover project ID
+railway_get_project(project_id)       → get service IDs + environment IDs
+railway_deploy_service(              \
+  service_id, environment_id,         → trigger redeploy (approval="APPROVED" required)
+  approval="APPROVED")
+railway_get_deploy_status(            \
+  deployment_id,                      → poll until SUCCESS/FAILED/CRASHED
+  timeout_seconds=120)
+railway_healthcheck(url)              → confirm service is responding
+```
+
+Deploy strategy: `serviceInstanceRedeploy` re-deploys current HEAD without requiring a commit SHA.
+All execute-mode operations are gated by `evaluate_execution_gate()` and require `approval="APPROVED"`.

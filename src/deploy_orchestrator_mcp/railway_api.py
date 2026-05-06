@@ -1,5 +1,7 @@
 from typing import Any
 
+import time
+
 import httpx
 
 from deploy_orchestrator_mcp.audit import create_audit_event
@@ -101,19 +103,27 @@ query Deployments($serviceId: String!, $environmentId: String!) {
 }
 """
 
+_Q_DEPLOYMENT = """
+query Deployment($id: String!) {
+  deployment(id: $id) {
+    id
+    status
+    url
+    createdAt
+    updatedAt
+  }
+}
+"""
+
+# serviceInstanceRedeploy re-deploys the current HEAD — no commit SHA required.
+# This is the canonical deploy strategy for this orchestrator.
 _M_REDEPLOY = """
 mutation ServiceInstanceRedeploy($serviceId: String!, $environmentId: String!) {
   serviceInstanceRedeploy(serviceId: $serviceId, environmentId: $environmentId)
 }
 """
 
-_M_DEPLOY_COMMIT = """
-mutation ServiceInstanceDeployV2($serviceId: String!, $environmentId: String!) {
-  serviceInstanceDeployV2(serviceId: $serviceId, environmentId: $environmentId) {
-    deploymentId
-  }
-}
-"""
+FINAL_DEPLOY_STATUSES = {"SUCCESS", "FAILED", "CRASHED", "REMOVED", "SKIPPED"}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -435,3 +445,116 @@ def railway_deploy(
         "gate": gate,
         "audit_event": audit_event,
     })
+
+
+def railway_get_deploy_status(
+    deployment_id: str,
+    *,
+    timeout_seconds: int = 0,
+    poll_interval_seconds: float = 5.0,
+    token: str | None = None,
+    client: httpx.Client | None = None,
+) -> dict[str, Any]:
+    """Read Railway deployment status, optionally polling until completion or timeout."""
+    resolved = _railway_token(token)
+    if not resolved:
+        return _missing_token_result("get_deploy_status")
+
+    deadline = time.monotonic() + max(timeout_seconds, 0)
+    attempts = 0
+
+    while True:
+        attempts += 1
+        data, audit_event = _gql(
+            _Q_DEPLOYMENT,
+            {"id": deployment_id},
+            token=resolved,
+            client=client,
+            operation="get_deploy_status",
+        )
+
+        if isinstance(data, dict) and data.get("error"):
+            return redact({
+                "provider": "railway",
+                "ok": False,
+                "deployment_id": deployment_id,
+                "errors": [data],
+                "audit_event": audit_event,
+            })
+
+        deployment = _normalize_deployment(data.get("deployment") or {})
+        status = deployment.get("status")
+
+        if not timeout_seconds or status in FINAL_DEPLOY_STATUSES or time.monotonic() >= deadline:
+            return redact({
+                "provider": "railway",
+                "ok": True,
+                "deployment_id": deployment.get("id") or deployment_id,
+                "status": status,
+                "complete": status in FINAL_DEPLOY_STATUSES,
+                "url": deployment.get("url"),
+                "attempts": attempts,
+                "deployment": deployment,
+                "audit_event": audit_event,
+            })
+
+        time.sleep(max(poll_interval_seconds, 0))
+
+
+def railway_healthcheck(
+    url: str,
+    *,
+    expected_status: int = 200,
+    timeout_seconds: float = 10.0,
+    client: httpx.Client | None = None,
+) -> dict[str, Any]:
+    """Run an HTTP healthcheck against a Railway service URL."""
+    if not url.startswith(("http://", "https://")):
+        return {
+            "provider": "railway",
+            "healthy": False,
+            "status_code": None,
+            "errors": ["healthcheck url must start with http:// or https://"],
+            "audit_event": create_audit_event(
+                "railway.healthcheck.blocked",
+                {"provider": "railway", "reason": "invalid_url"},
+            ),
+        }
+
+    owns_client = client is None
+    http_client = client or httpx.Client(timeout=timeout_seconds)
+
+    try:
+        response = http_client.get(url)
+        healthy = response.status_code == expected_status
+        return redact({
+            "provider": "railway",
+            "healthy": healthy,
+            "status_code": response.status_code,
+            "expected_status": expected_status,
+            "url": url,
+            "audit_event": create_audit_event(
+                "railway.healthcheck.completed",
+                {
+                    "provider": "railway",
+                    "url": url,
+                    "status_code": response.status_code,
+                    "healthy": healthy,
+                },
+            ),
+        })
+    except httpx.HTTPError as exc:
+        return redact({
+            "provider": "railway",
+            "healthy": False,
+            "status_code": None,
+            "errors": [str(exc)],
+            "url": url,
+            "audit_event": create_audit_event(
+                "railway.healthcheck.failed",
+                {"provider": "railway", "url": url, "error": str(exc)},
+            ),
+        })
+    finally:
+        if owns_client:
+            http_client.close()
