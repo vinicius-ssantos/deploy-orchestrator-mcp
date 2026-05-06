@@ -1,4 +1,8 @@
+import os
+
 from fastmcp import FastMCP
+from fastmcp.server.auth import StaticTokenVerifier
+from starlette.responses import JSONResponse
 
 from deploy_orchestrator_mcp.analyzer import analyze_file_list
 from deploy_orchestrator_mcp.config import get_settings
@@ -33,7 +37,27 @@ from deploy_orchestrator_mcp.supabase_provider import (
     supabase_validate_request,
 )
 
-mcp = FastMCP("deploy-orchestrator-mcp")
+def _build_auth():
+    token = os.getenv("MCP_REMOTE_AUTH_TOKEN", "").strip()
+    if not token:
+        return None
+    return StaticTokenVerifier(
+        tokens={
+            token: {
+                "client_id": "deploy-orchestrator-remote-client",
+                "scopes": ["mcp:read", "mcp:write"],
+            }
+        }
+    )
+
+
+mcp = FastMCP("deploy-orchestrator-mcp", auth=_build_auth())
+
+
+@mcp.custom_route("/healthz", methods=["GET"])
+async def healthz(_request):
+    """Simple health endpoint for platform probes."""
+    return JSONResponse({"ok": True, "service": "deploy-orchestrator-mcp"})
 
 
 @mcp.tool()
@@ -308,5 +332,44 @@ def supabase_project_plan(
     )
 
 
+def _as_bool(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _require_auth_for_remote(transport: str) -> None:
+    if transport == "stdio":
+        return
+    allow_unauth_remote = _as_bool(os.getenv("MCP_ALLOW_UNAUTH_REMOTE"), default=False)
+    has_remote_token = bool(os.getenv("MCP_REMOTE_AUTH_TOKEN", "").strip())
+    if not allow_unauth_remote and not has_remote_token:
+        raise RuntimeError(
+            "Remote transport requires MCP_REMOTE_AUTH_TOKEN. "
+            "Set MCP_ALLOW_UNAUTH_REMOTE=true only for temporary development use."
+        )
+
+
 if __name__ == "__main__":
-    mcp.run(transport="stdio")
+    transport = os.getenv("MCP_TRANSPORT", "stdio").strip().lower() or "stdio"
+    if transport in {"http", "streamable-http", "streamable_http"}:
+        transport = "streamable-http"
+
+    _require_auth_for_remote(transport)
+
+    if transport == "stdio":
+        mcp.run(transport="stdio")
+    elif transport == "sse":
+        host = os.getenv("HOST", "0.0.0.0")
+        port = int(os.getenv("PORT", "10000"))
+        path = os.getenv("MCP_HTTP_PATH", "/sse")
+        mcp.run(transport="sse", host=host, port=port, path=path)
+    elif transport == "streamable-http":
+        host = os.getenv("HOST", "0.0.0.0")
+        port = int(os.getenv("PORT", "10000"))
+        path = os.getenv("MCP_HTTP_PATH", "/mcp")
+        mcp.run(transport="streamable-http", host=host, port=port, path=path)
+    else:
+        raise RuntimeError(
+            "Unsupported MCP_TRANSPORT. Use one of: stdio, sse, streamable-http."
+        )

@@ -136,6 +136,34 @@ Get-Content .env | ForEach-Object {
 .\.venv\Scripts\python.exe -m deploy_orchestrator_mcp.server
 ```
 
+## Remote MCP deployment (Render)
+
+The server supports both local stdio and remote HTTP transports:
+
+- `MCP_TRANSPORT=stdio` for local clients
+- `MCP_TRANSPORT=streamable-http` for remote MCP
+- `MCP_TRANSPORT=sse` as an alternative remote transport
+
+Recommended remote settings:
+
+```env
+MCP_TRANSPORT=streamable-http
+MCP_HTTP_PATH=/mcp
+HOST=0.0.0.0
+PORT=10000
+MCP_REMOTE_AUTH_TOKEN=<strong-random-token>
+MCP_ALLOW_UNAUTH_REMOTE=false
+```
+
+Health endpoint:
+
+- `GET /healthz`
+
+Important:
+
+- Remote transport requires `MCP_REMOTE_AUTH_TOKEN` unless `MCP_ALLOW_UNAUTH_REMOTE=true`.
+- Keep provider secrets (for example `RENDER_API_KEY`) only in Render environment variables.
+
 ## Policy and approval behavior
 
 Deployment plans include two separate safety signals:

@@ -61,3 +61,27 @@ After starting the MCP server, run this sequence from your MCP client:
 3. `render_deploy_staging(service_id="srv_xxx", approval="APPROVED")`
 4. `render_get_deploy_status(service_id="srv_xxx", deploy_id="dep_xxx")`
 5. `render_healthcheck(url="https://your-service.onrender.com/healthz")`
+
+## Remote mode (for MCP connector)
+
+Set environment variables before starting the server:
+
+```env
+MCP_TRANSPORT=streamable-http
+MCP_HTTP_PATH=/mcp
+HOST=0.0.0.0
+PORT=10000
+MCP_REMOTE_AUTH_TOKEN=<strong-random-token>
+MCP_ALLOW_UNAUTH_REMOTE=false
+```
+
+Start:
+
+```bash
+python -m deploy_orchestrator_mcp.server
+```
+
+Endpoints:
+
+- MCP remote endpoint: `/mcp` (or your `MCP_HTTP_PATH`)
+- Health endpoint: `/healthz`
