@@ -11,7 +11,7 @@ It is designed to work together with `github-unified-mcp`:
 
 MVP dry-run scaffold with provider-specific planning.
 
-The server does not execute real deploys yet.
+Render real API support is available with approval-gated execution for staging deploys.
 
 ## Implemented tools
 
@@ -27,6 +27,11 @@ Render tools:
 
 - `render_validate`
 - `render_service_plan`
+- `render_validate_credentials`
+- `render_list_services`
+- `render_deploy_staging` (requires `approval="APPROVED"`)
+- `render_get_deploy_status`
+- `render_healthcheck`
 
 Railway tools:
 
@@ -118,6 +123,19 @@ $env:PYTHONPATH="src"; .\.venv\Scripts\python.exe scripts\smoke_test.py
 .\.venv\Scripts\python.exe -m deploy_orchestrator_mcp.server
 ```
 
+Using `.env` on Windows PowerShell:
+
+```powershell
+# Fill RENDER_API_KEY and other values in .env first
+Get-Content .env | ForEach-Object {
+  if ($_ -match '^\s*#' -or $_ -match '^\s*$') { return }
+  $name, $value = $_ -split '=', 2
+  [System.Environment]::SetEnvironmentVariable($name, $value, 'Process')
+}
+
+.\.venv\Scripts\python.exe -m deploy_orchestrator_mcp.server
+```
+
 ## Policy and approval behavior
 
 Deployment plans include two separate safety signals:
@@ -192,7 +210,7 @@ repo_analyze -> deploy_generate_plan -> provider recommendation -> provider-spec
 Next:
 
 1. Add repo-level policy files.
-2. Add provider credential validation in read-only mode.
-3. Add Render read-only API client.
-4. Add Supabase read-only API client.
-5. Add approval-gated execution model.
+2. Add Supabase read-only API client.
+3. Add Railway real API execution tools.
+4. Add Koyeb, Fly and Coolify real API execution tools.
+5. Add persistent audit log and CI gate check before execute.
