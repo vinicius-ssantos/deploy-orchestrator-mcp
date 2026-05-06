@@ -35,9 +35,16 @@ Render tools:
 
 Railway tools:
 
-- `railway_validate`
-- `railway_service_plan`
-- `railway_postgres_plan`
+- `railway_validate` — dry-run gate
+- `railway_service_plan` — dry-run service plan
+- `railway_postgres_plan` — dry-run Postgres plan
+- `railway_validate_credentials` — validate token (read-only)
+- `railway_list_projects` — list all projects
+- `railway_get_project` — get project with services and environments
+- `railway_list_deployments` — list recent deployments for a service
+- `railway_deploy_service` — trigger deploy via `serviceInstanceRedeploy` (requires `approval="APPROVED"`)
+- `railway_get_deploy_status` — read or poll deployment status until completion
+- `railway_healthcheck` — HTTP healthcheck against a Railway service URL
 
 Fly.io tools:
 
@@ -211,6 +218,6 @@ Next:
 
 1. Add repo-level policy files.
 2. Add Supabase read-only API client.
-3. Add Railway real API execution tools.
-4. Add Koyeb, Fly and Coolify real API execution tools.
+3. ~~Add Railway real API execution tools.~~ ✅ Done (PR #36 + #37)
+4. Add Fly.io, Koyeb and Coolify real API execution tools.
 5. Add persistent audit log and CI gate check before execute.

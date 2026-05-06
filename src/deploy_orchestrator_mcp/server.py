@@ -24,7 +24,9 @@ from deploy_orchestrator_mcp.policy import evaluate_policy
 from deploy_orchestrator_mcp.providers import get_provider_capability, list_provider_capabilities
 from deploy_orchestrator_mcp.railway_api import (
     railway_deploy as railway_api_deploy,
+    railway_get_deploy_status as railway_api_get_deploy_status,
     railway_get_project as railway_api_get_project,
+    railway_healthcheck as railway_api_healthcheck,
     railway_list_deployments as railway_api_list_deployments,
     railway_list_projects as railway_api_list_projects,
     railway_validate_credentials as railway_api_validate_credentials,
@@ -308,6 +310,26 @@ def railway_deploy_service(
 ):
     """Trigger a Railway deployment after approval gate validation."""
     return railway_api_deploy(service_id, environment_id, approval=approval)
+
+
+@mcp.tool()
+def railway_get_deploy_status(
+    deployment_id: str,
+    timeout_seconds: int = 0,
+    poll_interval_seconds: float = 5.0,
+):
+    """Read or poll Railway deployment status until completion or timeout."""
+    return railway_api_get_deploy_status(
+        deployment_id,
+        timeout_seconds=timeout_seconds,
+        poll_interval_seconds=poll_interval_seconds,
+    )
+
+
+@mcp.tool()
+def railway_healthcheck(url: str, expected_status: int = 200, timeout_seconds: float = 10.0):
+    """Run an HTTP healthcheck against a Railway service URL."""
+    return railway_api_healthcheck(url, expected_status=expected_status, timeout_seconds=timeout_seconds)
 
 
 @mcp.tool()
