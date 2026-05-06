@@ -17,6 +17,13 @@ from deploy_orchestrator_mcp.railway_provider import (
     railway_generate_service_plan,
     railway_validate_request,
 )
+from deploy_orchestrator_mcp.render_api import (
+    render_deploy_staging as render_api_deploy_staging,
+    render_get_deploy_status as render_api_get_deploy_status,
+    render_healthcheck as render_api_healthcheck,
+    render_list_services as render_api_list_services,
+    render_validate_credentials as render_api_validate_credentials,
+)
 from deploy_orchestrator_mcp.render_provider import (
     render_generate_service_plan,
     render_validate_request,
@@ -104,6 +111,58 @@ def render_service_plan(repo_full_name: str, service_name: str, environment: str
         repo_full_name=repo_full_name,
         service_name=service_name,
         environment=environment,
+    )
+
+
+@mcp.tool()
+def render_validate_credentials():
+    """Validate Render API credentials using a read-only API call."""
+    return render_api_validate_credentials()
+
+
+@mcp.tool()
+def render_list_services(limit: int = 20, cursor: str | None = None):
+    """List Render services for the authenticated account."""
+    return render_api_list_services(limit=limit, cursor=cursor)
+
+
+@mcp.tool()
+def render_deploy_staging(
+    service_id: str,
+    approval: str | bool | None = None,
+    clear_cache: bool = False,
+):
+    """Trigger a Render staging deploy after approval gate validation."""
+    return render_api_deploy_staging(
+        service_id=service_id,
+        approval=approval,
+        clear_cache=clear_cache,
+    )
+
+
+@mcp.tool()
+def render_get_deploy_status(
+    service_id: str,
+    deploy_id: str | None = None,
+    timeout_seconds: int = 0,
+    poll_interval_seconds: float = 5.0,
+):
+    """Read or poll Render deploy status."""
+    return render_api_get_deploy_status(
+        service_id=service_id,
+        deploy_id=deploy_id,
+        timeout_seconds=timeout_seconds,
+        poll_interval_seconds=poll_interval_seconds,
+    )
+
+
+@mcp.tool()
+def render_healthcheck(url: str, expected_status: int = 200, timeout_seconds: float = 10.0):
+    """Run an HTTP healthcheck against a Render service URL."""
+    return render_api_healthcheck(
+        url=url,
+        expected_status=expected_status,
+        timeout_seconds=timeout_seconds,
     )
 
 
