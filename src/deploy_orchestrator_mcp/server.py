@@ -49,6 +49,7 @@ from deploy_orchestrator_mcp.render_api import (
     render_get_runtime_logs as render_api_get_runtime_logs,
     render_healthcheck as render_api_healthcheck,
     render_list_services as render_api_list_services,
+    render_rollback_staging as render_api_rollback_staging,
     render_validate_credentials as render_api_validate_credentials,
 )
 from deploy_orchestrator_mcp.render_provider import (
@@ -392,6 +393,26 @@ def render_get_build_logs(deploy_id: str, tail: int = 100):
 def render_get_runtime_logs(service_id: str, tail: int = 100):
     """Fetch recent runtime logs for a Render service."""
     return render_api_get_runtime_logs(service_id=service_id, tail=tail)
+
+
+@mcp.tool()
+def render_rollback_staging(
+    service_id: str,
+    target_deploy_id: str,
+    approval: str,
+    confirm: str,
+):
+    """Revert a staging service to a previous deploy.
+
+    Requires approval='APPROVED' and confirm='CONFIRM_DESTRUCTIVE_OPERATION'.
+    After rollback, poll render_get_deploy_status until 'live', then run render_healthcheck.
+    """
+    return render_api_rollback_staging(
+        service_id=service_id,
+        target_deploy_id=target_deploy_id,
+        approval=approval,
+        confirm=confirm,
+    )
 
 
 # ---------------------------------------------------------------------------
