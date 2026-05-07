@@ -7,6 +7,7 @@ from fastmcp import FastMCP
 _START_TIME = time.time()
 
 from deploy_orchestrator_mcp.analyzer import analyze_file_list
+from deploy_orchestrator_mcp.audit import audit_log_list as _audit_log_list, audit_log_status as _audit_log_status
 from deploy_orchestrator_mcp.auth import auth_status, validate_bearer_token
 from deploy_orchestrator_mcp.config import get_settings
 from deploy_orchestrator_mcp.coolify_provider import (
@@ -239,6 +240,23 @@ def credentials_clear(provider: str):
     """Remove a provider credential from the runtime store."""
     clear_credential(provider)
     return {"ok": True, "provider": provider, "message": f"Credential for '{provider}' cleared."}
+
+
+# ---------------------------------------------------------------------------
+# Audit log
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def audit_log_status():
+    """Return the status of the persistent audit log backend."""
+    return _audit_log_status()
+
+
+@mcp.tool()
+def audit_log_list(limit: int = 50):
+    """List recent audit events from the persistent log. Returns empty list if MCP_AUDIT_LOG_PATH is not set."""
+    return _audit_log_list(limit=limit)
 
 
 # ---------------------------------------------------------------------------
