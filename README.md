@@ -9,9 +9,7 @@ It is designed to work together with `github-unified-mcp`:
 
 ## Current status
 
-MVP dry-run scaffold with provider-specific planning.
-
-Render real API support is available with approval-gated execution for staging deploys.
+Phases 0–3 complete. Render, Railway and Supabase real APIs are integrated with approval-gated execution and CI gate enforcement. OAuth 2.0 (Authorization Code + PKCE) is available for remote/ChatGPT connector access.
 
 ## Implemented tools
 
@@ -22,16 +20,20 @@ Core tools:
 - `provider_capabilities`
 - `repo_analyze`
 - `deploy_generate_plan`
+- `evaluate_execution_gate` — CI gate + approval + policy check before any deploy
 
 Render tools:
 
-- `render_validate`
-- `render_service_plan`
-- `render_validate_credentials`
-- `render_list_services`
-- `render_deploy_staging` (requires `approval="APPROVED"`)
-- `render_get_deploy_status`
-- `render_healthcheck`
+- `render_validate` — dry-run gate
+- `render_service_plan` — dry-run service plan
+- `render_validate_credentials` — validate API key (read-only)
+- `render_list_services` — list services
+- `render_deploy_staging` — trigger staging deploy (requires `approval="APPROVED"`, `ci_gate`)
+- `render_get_deploy_status` — read or poll deploy status
+- `render_healthcheck` — HTTP healthcheck
+- `render_get_build_logs` — fetch build logs for a deploy
+- `render_get_runtime_logs` — fetch runtime logs for a service
+- `render_rollback_staging` — revert staging to a previous deploy (requires `approval="APPROVED"` + `confirm="CONFIRM_DESTRUCTIVE_OPERATION"`)
 
 Railway tools:
 
@@ -42,9 +44,20 @@ Railway tools:
 - `railway_list_projects` — list all projects
 - `railway_get_project` — get project with services and environments
 - `railway_list_deployments` — list recent deployments for a service
-- `railway_deploy_service` — trigger deploy via `serviceInstanceRedeploy` (requires `approval="APPROVED"`)
-- `railway_get_deploy_status` — read or poll deployment status until completion
-- `railway_healthcheck` — HTTP healthcheck against a Railway service URL
+- `railway_deploy_service` — trigger deploy (requires `approval="APPROVED"`, `ci_gate`)
+- `railway_get_deploy_status` — read or poll deployment status
+- `railway_healthcheck` — HTTP healthcheck
+
+Supabase tools:
+
+- `supabase_validate` — dry-run gate
+- `supabase_project_plan` — dry-run project plan
+- `supabase_validate_credentials` — validate access token (read-only)
+- `supabase_list_organizations` — list organizations
+- `supabase_list_projects` — list projects
+- `supabase_get_project_status` — get project status
+- `supabase_get_connection_info` — safe connection metadata (no secrets returned)
+- `supabase_healthcheck` — REST API reachability check
 
 Fly.io tools:
 
@@ -61,11 +74,6 @@ Coolify tools:
 - `coolify_validate`
 - `coolify_app_plan`
 - `coolify_database_plan`
-
-Supabase tools:
-
-- `supabase_validate`
-- `supabase_project_plan`
 
 ## Initial providers
 
