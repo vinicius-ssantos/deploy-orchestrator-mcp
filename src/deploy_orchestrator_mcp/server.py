@@ -510,6 +510,10 @@ def _make_asgi_app():
         async def dispatch(self, request, call_next):
             from deploy_orchestrator_mcp.auth import is_auth_enabled, validate_bearer_token
 
+            # Healthcheck endpoint must stay public for platform probes.
+            if request.url.path == "/healthz":
+                return await call_next(request)
+
             if not is_auth_enabled():
                 return await call_next(request)
 
