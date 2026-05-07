@@ -56,6 +56,14 @@ from deploy_orchestrator_mcp.render_provider import (
     render_generate_service_plan,
     render_validate_request,
 )
+from deploy_orchestrator_mcp.supabase_api import (
+    supabase_get_connection_info as supabase_api_get_connection_info,
+    supabase_get_project_status as supabase_api_get_project_status,
+    supabase_healthcheck as supabase_api_healthcheck,
+    supabase_list_organizations as supabase_api_list_organizations,
+    supabase_list_projects as supabase_api_list_projects,
+    supabase_validate_credentials as supabase_api_validate_credentials,
+)
 from deploy_orchestrator_mcp.supabase_provider import (
     supabase_generate_project_plan,
     supabase_validate_request,
@@ -656,6 +664,42 @@ def supabase_project_plan(
         needs_auth=needs_auth,
         needs_storage=needs_storage,
     )
+
+
+@mcp.tool()
+def supabase_validate_credentials():
+    """Validate Supabase access token without exposing it."""
+    return supabase_api_validate_credentials()
+
+
+@mcp.tool()
+def supabase_list_organizations():
+    """List Supabase organizations accessible to the configured token."""
+    return supabase_api_list_organizations()
+
+
+@mcp.tool()
+def supabase_list_projects():
+    """List all Supabase projects accessible to the configured token."""
+    return supabase_api_list_projects()
+
+
+@mcp.tool()
+def supabase_get_project_status(project_id: str):
+    """Get the current status of a Supabase project."""
+    return supabase_api_get_project_status(project_id)
+
+
+@mcp.tool()
+def supabase_get_connection_info(project_id: str):
+    """Return safe redacted connection metadata for a Supabase project. Never returns service role key or DB password."""
+    return supabase_api_get_connection_info(project_id)
+
+
+@mcp.tool()
+def supabase_healthcheck(project_id: str):
+    """Check reachability of a Supabase project REST API."""
+    return supabase_api_healthcheck(project_id)
 
 
 # ---------------------------------------------------------------------------
