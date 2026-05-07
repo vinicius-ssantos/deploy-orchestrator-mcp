@@ -1,15 +1,20 @@
 """OAuth 2.0 Authorization Code flow with optional PKCE (S256).
 
 Supports ChatGPT custom connector and any OAuth 2.0-compatible client.
-In-memory stores are sufficient for single-instance deployments.
+
+Store backend is selected at startup:
+  - REDIS_URL set → RedisAuthCodeStore + RedisTokenStore (survives redeploys,
+    supports horizontal scale)
+  - REDIS_URL unset → in-memory stores (local / stdio / test usage)
 """
 
 import base64
 import hashlib
+import json
 import os
 import secrets
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -142,17 +147,117 @@ class TokenStore:
         self._store = {k: v for k, v in self._store.items() if now <= v.expires_at}
 
 
-# Module-level singletons reused across requests.
-_auth_code_store = AuthCodeStore(ttl=600)
-_token_store = TokenStore()
+# ---------------------------------------------------------------------------
+# Redis-backed stores
+# ---------------------------------------------------------------------------
+
+_REDIS_CODE_PREFIX = "mcp:oauth:code:"
+_REDIS_TOKEN_PREFIX = "mcp:oauth:token:"
 
 
-def get_auth_code_store() -> AuthCodeStore:
+class RedisAuthCodeStore:
+    """Auth code store backed by Redis. TTL and single-use enforced server-side."""
+
+    def __init__(self, client, ttl: int = 600):
+        self._r = client
+        self._ttl = ttl
+
+    def issue(
+        self,
+        client_id: str,
+        redirect_uri: str,
+        scope: str,
+        code_challenge: Optional[str] = None,
+        code_challenge_method: Optional[str] = None,
+    ) -> str:
+        code = secrets.token_urlsafe(32)
+        payload = json.dumps({
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "scope": scope,
+            "code_challenge": code_challenge,
+            "code_challenge_method": code_challenge_method,
+        })
+        self._r.set(f"{_REDIS_CODE_PREFIX}{code}", payload, ex=self._ttl)
+        return code
+
+    def consume(self, code: str) -> Optional[_AuthCodeEntry]:
+        key = f"{_REDIS_CODE_PREFIX}{code}"
+        # Atomic get-and-delete: only the first caller succeeds.
+        raw = self._r.getdel(key)
+        if raw is None:
+            return None
+        data = json.loads(raw)
+        return _AuthCodeEntry(
+            client_id=data["client_id"],
+            redirect_uri=data["redirect_uri"],
+            scope=data["scope"],
+            code_challenge=data.get("code_challenge"),
+            code_challenge_method=data.get("code_challenge_method"),
+            expires_at=0.0,  # TTL enforced by Redis; entry is already consumed
+        )
+
+
+class RedisTokenStore:
+    """Token store backed by Redis. TTL enforced server-side."""
+
+    def __init__(self, client):
+        self._r = client
+
+    def issue(self, client_id: str, scope: str, ttl: int) -> str:
+        token = secrets.token_urlsafe(40)
+        payload = json.dumps({"client_id": client_id, "scope": scope})
+        self._r.set(f"{_REDIS_TOKEN_PREFIX}{token}", payload, ex=ttl)
+        return token
+
+    def validate(self, token: str) -> bool:
+        return bool(self._r.exists(f"{_REDIS_TOKEN_PREFIX}{token}"))
+
+
+# ---------------------------------------------------------------------------
+# Store factory — selects Redis or in-memory based on REDIS_URL
+# ---------------------------------------------------------------------------
+
+_auth_code_store: "AuthCodeStore | RedisAuthCodeStore | None" = None
+_token_store: "TokenStore | RedisTokenStore | None" = None
+
+
+try:
+    import redis
+except ImportError:  # pragma: no cover
+    redis = None  # type: ignore[assignment]
+
+
+def _build_stores() -> tuple:
+    redis_url = os.getenv("REDIS_URL", "").strip()
+    if redis_url:
+        if redis is None:  # pragma: no cover
+            raise RuntimeError("redis package is not installed; add 'redis[hiredis]>=5' to dependencies")
+        client = redis.from_url(redis_url, decode_responses=True)
+        client.ping()  # fail fast if Redis is unreachable
+        return RedisAuthCodeStore(client, ttl=600), RedisTokenStore(client)
+    return AuthCodeStore(ttl=600), TokenStore()
+
+
+def get_auth_code_store():
+    global _auth_code_store, _token_store
+    if _auth_code_store is None:
+        _auth_code_store, _token_store = _build_stores()
     return _auth_code_store
 
 
-def get_token_store() -> TokenStore:
+def get_token_store():
+    global _auth_code_store, _token_store
+    if _token_store is None:
+        _auth_code_store, _token_store = _build_stores()
     return _token_store
+
+
+def reset_stores() -> None:
+    """Force re-initialisation of stores — used in tests."""
+    global _auth_code_store, _token_store
+    _auth_code_store = None
+    _token_store = None
 
 
 # ---------------------------------------------------------------------------
