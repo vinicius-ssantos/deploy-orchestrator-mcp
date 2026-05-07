@@ -1,6 +1,10 @@
+import hashlib
 import os
+import time
 
 from fastmcp import FastMCP
+
+_START_TIME = time.time()
 
 from deploy_orchestrator_mcp.analyzer import analyze_file_list
 from deploy_orchestrator_mcp.auth import auth_status, validate_bearer_token
@@ -65,9 +69,32 @@ mcp = FastMCP("deploy-orchestrator-mcp")
 @mcp.custom_route("/healthz", methods=["GET"])
 async def healthz(_request):
     """Public health endpoint for platform probes."""
+    import importlib.metadata
+
     from starlette.responses import JSONResponse
 
-    return JSONResponse({"ok": True, "service": "deploy-orchestrator-mcp"})
+    try:
+        version = importlib.metadata.version("deploy-orchestrator-mcp")
+    except importlib.metadata.PackageNotFoundError:
+        version = "unknown"
+
+    tool_names = sorted(t.name for t in await mcp.list_tools())
+    tool_schema_version = hashlib.sha256(" ".join(tool_names).encode()).hexdigest()[:8]
+
+    commit_sha = (
+        os.getenv("RENDER_GIT_COMMIT")
+        or os.getenv("GIT_COMMIT")
+        or "unknown"
+    )
+
+    return JSONResponse({
+        "ok": True,
+        "service": "deploy-orchestrator-mcp",
+        "version": version,
+        "tool_schema_version": tool_schema_version,
+        "commit_sha": commit_sha,
+        "uptime_seconds": int(time.time() - _START_TIME),
+    })
 
 
 @mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])
