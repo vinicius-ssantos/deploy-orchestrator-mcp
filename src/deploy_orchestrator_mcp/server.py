@@ -62,6 +62,14 @@ mcp = FastMCP("deploy-orchestrator-mcp")
 # ---------------------------------------------------------------------------
 
 
+@mcp.custom_route("/healthz", methods=["GET"])
+async def healthz(_request):
+    """Public health endpoint for platform probes."""
+    from starlette.responses import JSONResponse
+
+    return JSONResponse({"ok": True, "service": "deploy-orchestrator-mcp"})
+
+
 @mcp.tool()
 def server_auth_status():
     """Return current server authentication configuration (no secrets exposed)."""
