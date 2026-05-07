@@ -57,6 +57,12 @@ from deploy_orchestrator_mcp.render_provider import (
     render_generate_service_plan,
     render_validate_request,
 )
+from deploy_orchestrator_mcp.render_workflows import (
+    render_cancel_task_run as render_workflows_cancel_task_run,
+    render_get_task_run as render_workflows_get_task_run,
+    render_list_task_runs as render_workflows_list_task_runs,
+    render_run_task as render_workflows_run_task,
+)
 from deploy_orchestrator_mcp.supabase_api import (
     supabase_get_connection_info as supabase_api_get_connection_info,
     supabase_get_project_status as supabase_api_get_project_status,
@@ -454,6 +460,55 @@ def render_rollback_staging(
         approval=approval,
         confirm=confirm,
     )
+
+
+# ---------------------------------------------------------------------------
+# Render Workflows
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def render_run_task(
+    task_slug: str,
+    input_data: dict | list | None = None,
+    wait: bool = True,
+    environment: str = "staging",
+    approval: str | None = None,
+):
+    """Trigger a Render Workflow task (e.g. migrations, smoke tests).
+
+    task_slug format: "workflow-slug/task-name"
+    Production environments require approval='APPROVED'.
+    Set wait=False to start the task and return immediately with the task_run_id.
+    """
+    return render_workflows_run_task(
+        task_slug=task_slug,
+        input_data=input_data,
+        wait=wait,
+        environment=environment,
+        approval=approval,
+    )
+
+
+@mcp.tool()
+def render_task_status(task_run_id: str):
+    """Poll the current status and output of a Render Workflow task run."""
+    return render_workflows_get_task_run(task_run_id=task_run_id)
+
+
+@mcp.tool()
+def render_list_task_runs(limit: int = 20):
+    """List recent Render Workflow task runs across all workflows."""
+    return render_workflows_list_task_runs(limit=limit)
+
+
+@mcp.tool()
+def render_cancel_task(task_run_id: str, confirm: str = ""):
+    """Cancel an in-progress Render Workflow task run.
+
+    Requires confirm='CONFIRM_DESTRUCTIVE_OPERATION'.
+    """
+    return render_workflows_cancel_task_run(task_run_id=task_run_id, confirm=confirm)
 
 
 # ---------------------------------------------------------------------------
