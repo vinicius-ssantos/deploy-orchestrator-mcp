@@ -25,7 +25,7 @@ from deploy_orchestrator_mcp.credentials import (
 from deploy_orchestrator_mcp.fly_provider import fly_generate_app_plan, fly_validate_request
 from deploy_orchestrator_mcp.koyeb_provider import koyeb_generate_service_plan, koyeb_validate_request
 from deploy_orchestrator_mcp.planner import generate_deployment_plan
-from deploy_orchestrator_mcp.policy import evaluate_policy
+from deploy_orchestrator_mcp.policy import evaluate_policy, parse_repo_policy
 from deploy_orchestrator_mcp.providers import get_provider_capability, list_provider_capabilities
 from deploy_orchestrator_mcp.railway_api import (
     railway_deploy as railway_api_deploy,
@@ -284,6 +284,21 @@ def policy_evaluate(
         app_provider=app_provider,
         database_provider=database_provider,
     )
+
+
+@mcp.tool()
+def policy_load(yaml_content: str):
+    """Parse the raw YAML content of .deploy-orchestrator/policy.yml.
+
+    Pass the file content as a string. Returns the parsed policy dict merged
+    with default values. Use the returned dict as the `policy` argument to
+    `policy_evaluate` or `deployment_plan`.
+    """
+    try:
+        parsed = parse_repo_policy(yaml_content)
+        return {"ok": True, "policy": parsed}
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
 
 
 # ---------------------------------------------------------------------------
