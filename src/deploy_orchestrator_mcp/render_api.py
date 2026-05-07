@@ -577,3 +577,84 @@ def render_get_runtime_logs(
         "truncated": truncated,
         "audit_event": audit_event,
     })
+
+
+CONFIRM_DESTRUCTIVE = "CONFIRM_DESTRUCTIVE_OPERATION"
+
+
+def render_rollback_staging(
+    *,
+    service_id: str,
+    target_deploy_id: str,
+    approval: str | bool | None = None,
+    confirm: str | None = None,
+    api_key: str | None = None,
+    client: httpx.Client | None = None,
+) -> dict[str, Any]:
+    """Revert a staging service to a previous deploy.
+
+    Requires dual confirmation: approval='APPROVED' and
+    confirm='CONFIRM_DESTRUCTIVE_OPERATION'. Never executes on production.
+    """
+    from deploy_orchestrator_mcp.execution import APPROVAL_TOKEN, _approval_present
+
+    if not _approval_present(approval):
+        return redact({
+            "provider": "render",
+            "rolled_back": False,
+            "errors": ["approval='APPROVED' is required to rollback"],
+            "audit_event": create_audit_event(
+                "render.rollback.blocked",
+                {"provider": "render", "reason": "missing_approval",
+                 "service_id": service_id, "target_deploy_id": target_deploy_id},
+            ),
+        })
+
+    if confirm != CONFIRM_DESTRUCTIVE:
+        return redact({
+            "provider": "render",
+            "rolled_back": False,
+            "errors": [f"confirm='{CONFIRM_DESTRUCTIVE}' is required to rollback"],
+            "audit_event": create_audit_event(
+                "render.rollback.blocked",
+                {"provider": "render", "reason": "missing_confirm",
+                 "service_id": service_id, "target_deploy_id": target_deploy_id},
+            ),
+        })
+
+    key = _render_api_key(api_key)
+    if not key:
+        return _missing_api_key_result("rollback_staging")
+
+    body, audit_event = _request(
+        "POST",
+        f"/services/{service_id}/deploys/{target_deploy_id}/rollback",
+        api_key=key,
+        client=client,
+        operation="rollback_staging",
+    )
+
+    if "error" in body:
+        return redact({
+            "provider": "render",
+            "rolled_back": False,
+            "service_id": service_id,
+            "target_deploy_id": target_deploy_id,
+            "errors": [body.get("response", {}).get("message", "unknown error")],
+            "audit_event": audit_event,
+        })
+
+    deploy = _normalize_deploy(body)
+    return redact({
+        "provider": "render",
+        "rolled_back": True,
+        "service_id": service_id,
+        "target_deploy_id": target_deploy_id,
+        "rollback_deploy_id": deploy.get("id"),
+        "status": deploy.get("status"),
+        "next_steps": [
+            "Poll render_get_deploy_status until status is 'live'",
+            "Run render_healthcheck after status reaches 'live'",
+        ],
+        "audit_event": audit_event,
+    })
