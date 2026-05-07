@@ -70,6 +70,98 @@ async def healthz(_request):
     return JSONResponse({"ok": True, "service": "deploy-orchestrator-mcp"})
 
 
+@mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])
+async def oauth_discovery(request):
+    """RFC 8414 authorization server metadata — consumed by ChatGPT connector."""
+    from starlette.responses import JSONResponse
+
+    from deploy_orchestrator_mcp.oauth import discovery_document, is_oauth_enabled
+
+    if not is_oauth_enabled():
+        return JSONResponse({"error": "OAuth is not configured"}, status_code=404)
+
+    base_url = str(request.base_url).rstrip("/")
+    return JSONResponse(discovery_document(base_url))
+
+
+@mcp.custom_route("/oauth/authorize", methods=["GET"])
+async def oauth_authorize(request):
+    """OAuth 2.0 authorization endpoint — redirects back with auth code."""
+    from urllib.parse import urlencode, urlparse
+
+    from starlette.responses import JSONResponse, RedirectResponse
+
+    from deploy_orchestrator_mcp.oauth import OAuthError, authorize, is_oauth_enabled
+
+    if not is_oauth_enabled():
+        return JSONResponse({"error": "OAuth is not configured"}, status_code=404)
+
+    params = request.query_params
+    client_id = params.get("client_id", "")
+    redirect_uri = params.get("redirect_uri", "")
+    response_type = params.get("response_type", "code")
+    scope = params.get("scope", "mcp")
+    state = params.get("state")
+    code_challenge = params.get("code_challenge")
+    code_challenge_method = params.get("code_challenge_method")
+
+    try:
+        result = authorize(
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            response_type=response_type,
+            scope=scope,
+            state=state,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+        )
+    except OAuthError as exc:
+        return JSONResponse({"error": exc.error, "error_description": exc.description}, status_code=exc.status)
+
+    # Basic redirect_uri structure check before redirecting.
+    parsed = urlparse(redirect_uri)
+    if not parsed.scheme or not parsed.netloc:
+        return JSONResponse({"error": "invalid_request", "error_description": "Malformed redirect_uri"}, status_code=400)
+
+    qs = urlencode(result)
+    return RedirectResponse(url=f"{redirect_uri}?{qs}", status_code=302)
+
+
+@mcp.custom_route("/oauth/token", methods=["POST"])
+async def oauth_token(request):
+    """OAuth 2.0 token endpoint — exchanges auth code for access token."""
+    from starlette.responses import JSONResponse
+
+    from deploy_orchestrator_mcp.oauth import OAuthError, exchange_code, is_oauth_enabled
+
+    if not is_oauth_enabled():
+        return JSONResponse({"error": "OAuth is not configured"}, status_code=404)
+
+    content_type = request.headers.get("content-type", "")
+    if "application/x-www-form-urlencoded" in content_type:
+        body = await request.form()
+        data = dict(body)
+    else:
+        try:
+            data = await request.json()
+        except Exception:
+            return JSONResponse({"error": "invalid_request", "error_description": "Unreadable request body"}, status_code=400)
+
+    try:
+        token_response = exchange_code(
+            grant_type=data.get("grant_type", ""),
+            code=data.get("code", ""),
+            client_id=data.get("client_id", ""),
+            client_secret=data.get("client_secret", ""),
+            redirect_uri=data.get("redirect_uri", ""),
+            code_verifier=data.get("code_verifier"),
+        )
+    except OAuthError as exc:
+        return JSONResponse({"error": exc.error, "error_description": exc.description}, status_code=exc.status)
+
+    return JSONResponse(token_response)
+
+
 @mcp.tool()
 def server_auth_status():
     """Return current server authentication configuration (no secrets exposed)."""
@@ -514,12 +606,18 @@ def _make_asgi_app():
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.responses import JSONResponse
 
+    _PUBLIC_PATHS = {
+        "/healthz",
+        "/.well-known/oauth-authorization-server",
+        "/oauth/authorize",
+        "/oauth/token",
+    }
+
     class _BearerAuthMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request, call_next):
-            from deploy_orchestrator_mcp.auth import is_auth_enabled, validate_bearer_token
+            from deploy_orchestrator_mcp.auth import is_auth_enabled, validate_any_token
 
-            # Healthcheck endpoint must stay public for platform probes.
-            if request.url.path == "/healthz":
+            if request.url.path in _PUBLIC_PATHS:
                 return await call_next(request)
 
             if not is_auth_enabled():
@@ -532,9 +630,9 @@ def _make_asgi_app():
                     status_code=401,
                 )
             token = auth_header[len("Bearer "):]
-            if not validate_bearer_token(token):
+            if not validate_any_token(token):
                 return JSONResponse(
-                    {"error": "unauthorized", "detail": "Invalid API key"},
+                    {"error": "unauthorized", "detail": "Invalid token"},
                     status_code=401,
                 )
             return await call_next(request)
