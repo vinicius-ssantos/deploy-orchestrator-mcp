@@ -65,6 +65,50 @@ Sensitive deployment actions require `approval="APPROVED"` passed to
 `evaluate_execution_gate()`. This token is distinct from
 `CONFIRM_DESTRUCTIVE_OPERATION` used by github-unified-mcp.
 
+## CI Gate Contract
+
+`evaluate_execution_gate()` requires a valid `ci_gate` payload when
+`mode="execute"`. The LLM must obtain this from `github-unified-mcp` before
+calling any deployment tool.
+
+### Required sequence before any execute-mode deployment
+
+```
+1. github-unified-mcp: pr_get(owner, repo, pr_number)         → head_sha
+2. github-unified-mcp: ci_gate_check(owner, repo, head_sha)   → {allowed, head_sha, ...}
+3. deploy-orchestrator-mcp: render_deploy_staging(..., ci_gate={allowed, head_sha})
+```
+
+### ci_gate payload fields
+
+| Field | Required | Description |
+|---|---|---|
+| `allowed` | Yes | `true` only when all required CI checks passed |
+| `head_sha` | Yes | Commit SHA that was checked |
+| `checked_at` | Recommended | ISO-8601 timestamp of the check |
+| `reason` | When `allowed=false` | Human-readable reason for the block |
+
+### Blocking rules in execute mode
+
+| Condition | Result |
+|---|---|
+| `ci_gate` absent | blocked — `"ci_gate is required for execute mode"` |
+| `ci_gate.allowed = false` | blocked — `"CI gate blocked: <reason>"` |
+| `ci_gate.head_sha` absent | blocked — `"ci_gate.head_sha is required"` |
+| All fields valid | proceeds to approval and policy checks |
+
+In `mode="dry-run"` the `ci_gate` field is ignored — no blocking occurs.
+
+### Example ci_gate payload
+
+```json
+{
+  "allowed": true,
+  "head_sha": "a1b2c3d4e5f6",
+  "checked_at": "2026-05-07T12:00:00Z"
+}
+```
+
 ## Injection risk at the boundary
 
 `files` (file_list) comes from untrusted GitHub content and may contain

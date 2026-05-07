@@ -292,10 +292,11 @@ def render_deploy_staging(
     api_key: str | None = None,
     client: httpx.Client | None = None,
     plan: dict[str, Any] | None = None,
+    ci_gate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Trigger a Render staging deploy after the execution gate allows it."""
     deploy_plan = plan or _deploy_plan(service_id, environment="staging")
-    gate = evaluate_execution_gate(deploy_plan, approval=approval, mode="execute")
+    gate = evaluate_execution_gate(deploy_plan, approval=approval, mode="execute", ci_gate=ci_gate)
     if not gate["allowed"]:
         return redact(
             {

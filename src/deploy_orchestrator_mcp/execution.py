@@ -16,7 +16,19 @@ def _approval_present(approval):
     return approval is True or approval == APPROVAL_TOKEN
 
 
-def evaluate_execution_gate(plan, approval=None, mode=None):
+def _validate_ci_gate(ci_gate):
+    """Validate the ci_gate dict. Returns a list of blocking reasons (empty = ok)."""
+    if ci_gate is None:
+        return ["ci_gate is required for execute mode"]
+    if not ci_gate.get("head_sha"):
+        return ["ci_gate.head_sha is required"]
+    if not ci_gate.get("allowed"):
+        reason = ci_gate.get("reason", "CI checks did not pass")
+        return [f"CI gate blocked: {reason}"]
+    return []
+
+
+def evaluate_execution_gate(plan, approval=None, mode=None, ci_gate=None):
     """Return a structured decision for whether a deployment plan can execute."""
     requested_mode = mode or plan.get("mode", "dry-run")
     reasons = []
@@ -37,6 +49,9 @@ def evaluate_execution_gate(plan, approval=None, mode=None):
                 },
             ),
         }
+
+    # CI gate is mandatory for execute mode
+    reasons.extend(_validate_ci_gate(ci_gate))
 
     if not _policy_valid(plan):
         reasons.append("policy validation failed")
@@ -67,6 +82,8 @@ def evaluate_execution_gate(plan, approval=None, mode=None):
                 "policy_valid": (plan.get("policy_result") or {}).get(
                     "valid", True
                 ),
+                "ci_gate_allowed": (ci_gate or {}).get("allowed"),
+                "ci_gate_head_sha": (ci_gate or {}).get("head_sha"),
                 "decision": decision,
             },
         ),

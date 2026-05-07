@@ -429,6 +429,7 @@ def railway_deploy(
     token: str | None = None,
     client: httpx.Client | None = None,
     plan: dict[str, Any] | None = None,
+    ci_gate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Trigger a Railway deployment after approval gate validation."""
     deploy_plan = plan or {
@@ -440,7 +441,7 @@ def railway_deploy(
         "service_id": service_id,
         "environment_id": environment_id,
     }
-    gate = evaluate_execution_gate(deploy_plan, approval=approval, mode="execute")
+    gate = evaluate_execution_gate(deploy_plan, approval=approval, mode="execute", ci_gate=ci_gate)
     if not gate["allowed"]:
         return redact({
             "provider": "railway",
@@ -618,6 +619,7 @@ def railway_provision_postgres(
     token: str | None = None,
     client: httpx.Client | None = None,
     plan: dict[str, Any] | None = None,
+    ci_gate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Provision a Railway PostgreSQL database with approval gate.
 
@@ -633,7 +635,7 @@ def railway_provision_postgres(
         "project_id": project_id,
         "environment_id": environment_id,
     }
-    gate = evaluate_execution_gate(deploy_plan, approval=approval, mode="execute")
+    gate = evaluate_execution_gate(deploy_plan, approval=approval, mode="execute", ci_gate=ci_gate)
     if not gate["allowed"]:
         return redact({
             "provider": "railway",
