@@ -44,7 +44,9 @@ from deploy_orchestrator_mcp.railway_provider import (
 )
 from deploy_orchestrator_mcp.render_api import (
     render_deploy_staging as render_api_deploy_staging,
+    render_get_build_logs as render_api_get_build_logs,
     render_get_deploy_status as render_api_get_deploy_status,
+    render_get_runtime_logs as render_api_get_runtime_logs,
     render_healthcheck as render_api_healthcheck,
     render_list_services as render_api_list_services,
     render_validate_credentials as render_api_validate_credentials,
@@ -378,6 +380,18 @@ def render_healthcheck(url: str, expected_status: int = 200, timeout_seconds: fl
         expected_status=expected_status,
         timeout_seconds=timeout_seconds,
     )
+
+
+@mcp.tool()
+def render_get_build_logs(deploy_id: str, tail: int = 100):
+    """Fetch build logs for a Render deploy. Use after a failed deploy to diagnose the cause."""
+    return render_api_get_build_logs(deploy_id=deploy_id, tail=tail)
+
+
+@mcp.tool()
+def render_get_runtime_logs(service_id: str, tail: int = 100):
+    """Fetch recent runtime logs for a Render service."""
+    return render_api_get_runtime_logs(service_id=service_id, tail=tail)
 
 
 # ---------------------------------------------------------------------------
