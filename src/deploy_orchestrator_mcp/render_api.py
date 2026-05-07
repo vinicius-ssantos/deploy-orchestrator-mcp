@@ -628,9 +628,10 @@ def render_rollback_staging(
 
     body, audit_event = _request(
         "POST",
-        f"/services/{service_id}/deploys/{target_deploy_id}/rollback",
+        f"/services/{service_id}/rollback",
         api_key=key,
         client=client,
+        json={"deployId": target_deploy_id},
         operation="rollback_staging",
     )
 

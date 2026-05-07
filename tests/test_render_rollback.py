@@ -71,7 +71,9 @@ def test_rollback_triggers_correct_endpoint(monkeypatch):
 
     def handler(request):
         assert request.method == "POST"
-        assert request.url.path == "/v1/services/srv-123/deploys/dep-old/rollback"
+        assert request.url.path == "/v1/services/srv-123/rollback"
+        import json as _json
+        assert _json.loads(request.content)["deployId"] == "dep-old"
         return httpx.Response(201, json={
             "id": "dep-new",
             "status": "build_in_progress",
