@@ -10,11 +10,11 @@ from starlette.testclient import TestClient
 from deploy_orchestrator_mcp.oauth import (
     AuthCodeStore,
     OAuthError,
-    TokenStore,
     authorize,
     discovery_document,
     exchange_code,
     is_oauth_enabled,
+    sign_access_token,
     validate_oauth_token,
 )
 
@@ -31,6 +31,7 @@ def oauth_env(monkeypatch):
     monkeypatch.setenv("OAUTH_REDIRECT_URIS", "https://chatgpt.com/aip/callback,https://example.com/cb")
     monkeypatch.setenv("OAUTH_SCOPES", "mcp")
     monkeypatch.setenv("OAUTH_TOKEN_TTL_SECONDS", "3600")
+    monkeypatch.setenv("MCP_OAUTH_SIGNING_KEY", "test-signing-key-0000000000000000")
     monkeypatch.delenv("MCP_SERVER_API_KEY", raising=False)
 
 
@@ -40,10 +41,8 @@ def fresh_stores(monkeypatch):
     from deploy_orchestrator_mcp import oauth as oauth_mod
 
     code_store = AuthCodeStore(ttl=600)
-    token_store = TokenStore()
     monkeypatch.setattr(oauth_mod, "_auth_code_store", code_store)
-    monkeypatch.setattr(oauth_mod, "_token_store", token_store)
-    return code_store, token_store
+    return code_store
 
 
 @pytest.fixture()
@@ -189,6 +188,7 @@ def test_exchange_happy_path(oauth_env, fresh_stores):
     )
     assert resp["token_type"] == "Bearer"
     assert "access_token" in resp
+    assert resp["access_token"].startswith("mcp.")
     assert resp["expires_in"] == 3600
     assert resp["scope"] == "mcp"
 
@@ -226,18 +226,12 @@ def test_exchange_code_reuse_rejected(oauth_env, fresh_stores):
 
 
 def test_exchange_expired_code(oauth_env, fresh_stores, monkeypatch):
-    code_store, _ = fresh_stores
-    from deploy_orchestrator_mcp import oauth as oauth_mod
-
-    # Issue a code that is already expired
-    monkeypatch.setattr(time, "monotonic", lambda: time.monotonic.__wrapped__() - 700 if hasattr(time.monotonic, "__wrapped__") else 0)
-    # Simpler: directly manipulate the entry TTL
+    code_store = fresh_stores
     code = code_store.issue(
         client_id="test-client-id",
         redirect_uri="https://chatgpt.com/aip/callback",
         scope="mcp",
     )
-    # Force expiry by setting expires_at in the past
     code_store._store[code].expires_at = time.monotonic() - 1
 
     with pytest.raises(OAuthError) as exc_info:
@@ -345,24 +339,40 @@ def test_pkce_verifier_required_when_challenge_set(oauth_env, fresh_stores):
 
 
 # ---------------------------------------------------------------------------
-# validate_oauth_token
+# validate_oauth_token / sign_access_token
 # ---------------------------------------------------------------------------
 
 
-def test_validate_oauth_token_valid(oauth_env, fresh_stores):
-    _, token_store = fresh_stores
-    token = token_store.issue(client_id="test-client-id", scope="mcp", ttl=3600)
+def test_validate_oauth_token_valid(monkeypatch):
+    monkeypatch.setenv("MCP_OAUTH_SIGNING_KEY", "test-signing-key-0000000000000000")
+    token = sign_access_token(client_id="test-client-id", scope="mcp", ttl=3600)
+    assert token.startswith("mcp.")
     assert validate_oauth_token(token) is True
 
 
-def test_validate_oauth_token_unknown(oauth_env, fresh_stores):
+def test_validate_oauth_token_unknown(monkeypatch):
+    monkeypatch.setenv("MCP_OAUTH_SIGNING_KEY", "test-signing-key-0000000000000000")
     assert validate_oauth_token("not-a-real-token") is False
 
 
-def test_validate_oauth_token_expired(oauth_env, fresh_stores):
-    _, token_store = fresh_stores
-    token = token_store.issue(client_id="test-client-id", scope="mcp", ttl=1)
-    token_store._store[token].expires_at = time.monotonic() - 1
+def test_validate_oauth_token_expired(monkeypatch):
+    monkeypatch.setenv("MCP_OAUTH_SIGNING_KEY", "test-signing-key-0000000000000000")
+    token = sign_access_token(client_id="test-client-id", scope="mcp", ttl=-1)
+    assert validate_oauth_token(token) is False
+
+
+def test_validate_oauth_token_tampered(monkeypatch):
+    monkeypatch.setenv("MCP_OAUTH_SIGNING_KEY", "test-signing-key-0000000000000000")
+    token = sign_access_token(client_id="test-client-id", scope="mcp", ttl=3600)
+    parts = token.split(".")
+    tampered = f"{parts[0]}.{parts[1]}TAMPERED.{parts[2]}"
+    assert validate_oauth_token(tampered) is False
+
+
+def test_validate_oauth_token_wrong_key(monkeypatch):
+    monkeypatch.setenv("MCP_OAUTH_SIGNING_KEY", "key-one-000000000000000000000000")
+    token = sign_access_token(client_id="test-client-id", scope="mcp", ttl=3600)
+    monkeypatch.setenv("MCP_OAUTH_SIGNING_KEY", "key-two-000000000000000000000000")
     assert validate_oauth_token(token) is False
 
 
@@ -404,7 +414,6 @@ def test_authorize_route_invalid_redirect(http_client):
 
 
 def test_token_route_happy_path(http_client):
-    # First get a code via the authorize route
     auth_resp = http_client.get(
         "/oauth/authorize",
         params={
@@ -433,7 +442,7 @@ def test_token_route_happy_path(http_client):
     assert token_resp.status_code == 200
     body = token_resp.json()
     assert body["token_type"] == "Bearer"
-    assert "access_token" in body
+    assert body["access_token"].startswith("mcp.")
 
 
 def test_token_route_invalid_code(http_client):
@@ -481,7 +490,6 @@ def test_middleware_accepts_oauth_token(oauth_env, fresh_stores):
         )
         access_token = token_resp.json()["access_token"]
 
-        # With a valid OAuth token the middleware must not return 401.
         mcp_resp = client.post(
             "/mcp",
             json={"jsonrpc": "2.0", "method": "tools/list", "id": 1},

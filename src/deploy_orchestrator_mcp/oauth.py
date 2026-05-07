@@ -2,20 +2,26 @@
 
 Supports ChatGPT custom connector and any OAuth 2.0-compatible client.
 
-Store backend is selected at startup:
-  - REDIS_URL set → RedisAuthCodeStore + RedisTokenStore (survives redeploys,
-    supports horizontal scale)
-  - REDIS_URL unset → in-memory stores (local / stdio / test usage)
+Access token design — stateless HMAC-SHA256 signed tokens:
+  - Format: mcp.<b64url(json_payload)>.<b64url(hmac_sha256_signature)>
+  - Payload fields: client_id, scope, iat, exp
+  - Signing key: MCP_OAUTH_SIGNING_KEY env var
+  - No token store needed — tokens survive redeploys with the same key
+
+Auth code store backend is selected at startup:
+  - REDIS_URL set   → RedisAuthCodeStore  (atomic GETDEL, multi-instance safe)
+  - REDIS_URL unset → AuthCodeStore       (in-memory, local / stdio / test)
 """
 
 import base64
 import hashlib
+import hmac as hmac_mod
 import json
 import os
 import secrets
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 
 # ---------------------------------------------------------------------------
@@ -57,8 +63,85 @@ def is_oauth_enabled() -> bool:
     return bool(os.getenv("OAUTH_CLIENT_ID", "").strip())
 
 
+def oauth_signing_key() -> str:
+    return os.getenv("MCP_OAUTH_SIGNING_KEY", "").strip()
+
+
 # ---------------------------------------------------------------------------
-# In-memory stores
+# Signed access token helpers
+# ---------------------------------------------------------------------------
+
+
+def _b64url_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _b64url_decode(value: str) -> bytes:
+    padded = value + "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(padded.encode("ascii"))
+
+
+def _json_b64url(payload: dict[str, Any]) -> str:
+    return _b64url_encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
+
+
+def _hmac_sign(message: str) -> str:
+    key = oauth_signing_key()
+    if not key:
+        raise RuntimeError("MCP_OAUTH_SIGNING_KEY is required when OAuth is enabled")
+    digest = hmac_mod.new(key.encode("utf-8"), message.encode("ascii"), hashlib.sha256).digest()
+    return _b64url_encode(digest)
+
+
+def sign_access_token(*, client_id: str, scope: str, ttl: int) -> str:
+    """Issue a self-contained HMAC-signed access token.
+
+    Format: mcp.<b64url(payload)>.<b64url(hmac)>
+    Survives redeploys as long as MCP_OAUTH_SIGNING_KEY stays the same.
+    """
+    now = int(time.time())
+    payload = {"client_id": client_id, "scope": scope, "iat": now, "exp": now + ttl}
+    encoded_payload = _json_b64url(payload)
+    encoded_sig = _hmac_sign(encoded_payload)
+    return f"mcp.{encoded_payload}.{encoded_sig}"
+
+
+def validate_access_token(token: str) -> Optional[dict[str, Any]]:
+    """Verify token signature and expiry. Returns payload dict or None."""
+    key = oauth_signing_key()
+    if not key or not token.startswith("mcp."):
+        return None
+
+    parts = token.split(".")
+    if len(parts) != 3:
+        return None
+
+    _, encoded_payload, encoded_sig = parts
+    try:
+        expected_sig = _hmac_sign(encoded_payload)
+    except RuntimeError:
+        return None
+
+    if not hmac_mod.compare_digest(encoded_sig, expected_sig):
+        return None
+
+    try:
+        payload = json.loads(_b64url_decode(encoded_payload).decode("utf-8"))
+    except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+
+    if int(payload.get("exp", 0)) < int(time.time()):
+        return None
+
+    return payload
+
+
+def validate_oauth_token(token: str) -> bool:
+    return validate_access_token(token) is not None
+
+
+# ---------------------------------------------------------------------------
+# In-memory auth code store
 # ---------------------------------------------------------------------------
 
 
@@ -71,13 +154,6 @@ class _AuthCodeEntry:
     code_challenge_method: Optional[str]
     expires_at: float
     used: bool = False
-
-
-@dataclass
-class _TokenEntry:
-    client_id: str
-    scope: str
-    expires_at: float
 
 
 class AuthCodeStore:
@@ -120,39 +196,11 @@ class AuthCodeStore:
         self._store = {k: v for k, v in self._store.items() if now <= v.expires_at and not v.used}
 
 
-class TokenStore:
-    def __init__(self) -> None:
-        self._store: dict[str, _TokenEntry] = {}
-
-    def issue(self, client_id: str, scope: str, ttl: int) -> str:
-        token = secrets.token_urlsafe(40)
-        self._store[token] = _TokenEntry(
-            client_id=client_id,
-            scope=scope,
-            expires_at=time.monotonic() + ttl,
-        )
-        return token
-
-    def validate(self, token: str) -> bool:
-        entry = self._store.get(token)
-        if entry is None:
-            return False
-        if time.monotonic() > entry.expires_at:
-            del self._store[token]
-            return False
-        return True
-
-    def _purge_expired(self) -> None:
-        now = time.monotonic()
-        self._store = {k: v for k, v in self._store.items() if now <= v.expires_at}
-
-
 # ---------------------------------------------------------------------------
-# Redis-backed stores
+# Redis-backed auth code store
 # ---------------------------------------------------------------------------
 
 _REDIS_CODE_PREFIX = "mcp:oauth:code:"
-_REDIS_TOKEN_PREFIX = "mcp:oauth:token:"
 
 
 class RedisAuthCodeStore:
@@ -198,66 +246,40 @@ class RedisAuthCodeStore:
         )
 
 
-class RedisTokenStore:
-    """Token store backed by Redis. TTL enforced server-side."""
-
-    def __init__(self, client):
-        self._r = client
-
-    def issue(self, client_id: str, scope: str, ttl: int) -> str:
-        token = secrets.token_urlsafe(40)
-        payload = json.dumps({"client_id": client_id, "scope": scope})
-        self._r.set(f"{_REDIS_TOKEN_PREFIX}{token}", payload, ex=ttl)
-        return token
-
-    def validate(self, token: str) -> bool:
-        return bool(self._r.exists(f"{_REDIS_TOKEN_PREFIX}{token}"))
-
-
 # ---------------------------------------------------------------------------
-# Store factory — selects Redis or in-memory based on REDIS_URL
+# Auth code store factory
 # ---------------------------------------------------------------------------
-
-_auth_code_store: "AuthCodeStore | RedisAuthCodeStore | None" = None
-_token_store: "TokenStore | RedisTokenStore | None" = None
-
 
 try:
     import redis
 except ImportError:  # pragma: no cover
     redis = None  # type: ignore[assignment]
 
+_auth_code_store: "AuthCodeStore | RedisAuthCodeStore | None" = None
 
-def _build_stores() -> tuple:
+
+def _build_auth_code_store():
     redis_url = os.getenv("REDIS_URL", "").strip()
     if redis_url:
         if redis is None:  # pragma: no cover
             raise RuntimeError("redis package is not installed; add 'redis[hiredis]>=5' to dependencies")
         client = redis.from_url(redis_url, decode_responses=True)
         client.ping()  # fail fast if Redis is unreachable
-        return RedisAuthCodeStore(client, ttl=600), RedisTokenStore(client)
-    return AuthCodeStore(ttl=600), TokenStore()
+        return RedisAuthCodeStore(client, ttl=600)
+    return AuthCodeStore(ttl=600)
 
 
 def get_auth_code_store():
-    global _auth_code_store, _token_store
+    global _auth_code_store
     if _auth_code_store is None:
-        _auth_code_store, _token_store = _build_stores()
+        _auth_code_store = _build_auth_code_store()
     return _auth_code_store
 
 
-def get_token_store():
-    global _auth_code_store, _token_store
-    if _token_store is None:
-        _auth_code_store, _token_store = _build_stores()
-    return _token_store
-
-
 def reset_stores() -> None:
-    """Force re-initialisation of stores — used in tests."""
-    global _auth_code_store, _token_store
+    """Force re-initialisation of the auth code store — used in tests."""
+    global _auth_code_store
     _auth_code_store = None
-    _token_store = None
 
 
 # ---------------------------------------------------------------------------
@@ -293,7 +315,7 @@ def authorize(
     code_challenge: Optional[str] = None,
     code_challenge_method: Optional[str] = None,
 ) -> dict:
-    """Validate params and issue an auth code.  Returns dict with 'code' (and 'state')."""
+    """Validate params and issue an auth code. Returns dict with 'code' (and 'state')."""
     config = get_oauth_config()
     if config is None:
         raise OAuthError("server_error", "OAuth is not configured", status=500)
@@ -332,7 +354,7 @@ def exchange_code(
     redirect_uri: str,
     code_verifier: Optional[str] = None,
 ) -> dict:
-    """Exchange an auth code for an access token."""
+    """Exchange an auth code for a signed access token."""
     config = get_oauth_config()
     if config is None:
         raise OAuthError("server_error", "OAuth is not configured", status=500)
@@ -370,22 +392,18 @@ def exchange_code(
         else:
             raise OAuthError("invalid_grant", "Unsupported PKCE method")
 
-    token = get_token_store().issue(
+    access_token = sign_access_token(
         client_id=client_id,
         scope=entry.scope,
         ttl=config.token_ttl,
     )
 
     return {
-        "access_token": token,
+        "access_token": access_token,
         "token_type": "Bearer",
         "expires_in": config.token_ttl,
         "scope": entry.scope,
     }
-
-
-def validate_oauth_token(token: str) -> bool:
-    return get_token_store().validate(token)
 
 
 def discovery_document(base_url: str) -> dict:
