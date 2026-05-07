@@ -481,3 +481,99 @@ def render_healthcheck(
     finally:
         if owns_client:
             http_client.close()
+
+
+def render_get_build_logs(
+    *,
+    deploy_id: str,
+    tail: int = 100,
+    api_key: str | None = None,
+    client: httpx.Client | None = None,
+) -> dict[str, Any]:
+    """Fetch build logs for a specific Render deploy."""
+    key = _render_api_key(api_key)
+    if not key:
+        return _missing_api_key_result("get_build_logs")
+
+    tail = min(tail, 500)
+    body, audit_event = _request(
+        "GET",
+        f"/deploys/{deploy_id}/logs",
+        api_key=key,
+        client=client,
+        params={"limit": tail},
+        operation="get_build_logs",
+    )
+
+    if "error" in body:
+        return redact({
+            "provider": "render",
+            "deploy_id": deploy_id,
+            "lines": [],
+            "errors": [body.get("response", {}).get("message", "unknown error")],
+            "audit_event": audit_event,
+        })
+
+    raw_lines = body if isinstance(body, list) else body.get("logs", [])
+    lines = [
+        {"timestamp": entry.get("timestamp"), "message": entry.get("message", "")}
+        for entry in raw_lines
+        if isinstance(entry, dict)
+    ]
+    truncated = len(lines) >= tail
+
+    return redact({
+        "provider": "render",
+        "deploy_id": deploy_id,
+        "lines": lines,
+        "truncated": truncated,
+        "audit_event": audit_event,
+    })
+
+
+def render_get_runtime_logs(
+    *,
+    service_id: str,
+    tail: int = 100,
+    api_key: str | None = None,
+    client: httpx.Client | None = None,
+) -> dict[str, Any]:
+    """Fetch recent runtime logs for a Render service."""
+    key = _render_api_key(api_key)
+    if not key:
+        return _missing_api_key_result("get_runtime_logs")
+
+    tail = min(tail, 500)
+    body, audit_event = _request(
+        "GET",
+        f"/services/{service_id}/logs",
+        api_key=key,
+        client=client,
+        params={"limit": tail},
+        operation="get_runtime_logs",
+    )
+
+    if "error" in body:
+        return redact({
+            "provider": "render",
+            "service_id": service_id,
+            "lines": [],
+            "errors": [body.get("response", {}).get("message", "unknown error")],
+            "audit_event": audit_event,
+        })
+
+    raw_lines = body if isinstance(body, list) else body.get("logs", [])
+    lines = [
+        {"timestamp": entry.get("timestamp"), "message": entry.get("message", "")}
+        for entry in raw_lines
+        if isinstance(entry, dict)
+    ]
+    truncated = len(lines) >= tail
+
+    return redact({
+        "provider": "render",
+        "service_id": service_id,
+        "lines": lines,
+        "truncated": truncated,
+        "audit_event": audit_event,
+    })
