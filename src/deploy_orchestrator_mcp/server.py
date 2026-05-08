@@ -24,6 +24,7 @@ from deploy_orchestrator_mcp.credentials import (
 )
 from deploy_orchestrator_mcp.fly_provider import fly_generate_app_plan, fly_validate_request
 from deploy_orchestrator_mcp.koyeb_provider import koyeb_generate_service_plan, koyeb_validate_request
+from deploy_orchestrator_mcp.migrations import run_staging_migration as migrations_run_staging_migration
 from deploy_orchestrator_mcp.planner import generate_deployment_plan
 from deploy_orchestrator_mcp.policy import evaluate_policy, parse_repo_policy
 from deploy_orchestrator_mcp.providers import get_provider_capability, list_provider_capabilities
@@ -494,6 +495,32 @@ def render_run_task(
 def render_task_status(task_run_id: str):
     """Poll the current status and output of a Render Workflow task run."""
     return render_workflows_get_task_run(task_run_id=task_run_id)
+
+
+@mcp.tool()
+def run_staging_migration(
+    task_slug: str,
+    ci_gate: dict,
+    approval: str | None = None,
+    environment: str = "staging",
+    app_provider: str = "render",
+    database_provider: str | None = "supabase",
+    policy: dict | None = None,
+    input_data: dict | list | None = None,
+    wait: bool = True,
+):
+    """Run a staging-first migration task with approval, policy, CI and audit gates."""
+    return migrations_run_staging_migration(
+        task_slug=task_slug,
+        ci_gate=ci_gate,
+        approval=approval,
+        environment=environment,
+        app_provider=app_provider,
+        database_provider=database_provider,
+        policy=policy,
+        input_data=input_data,
+        wait=wait,
+    )
 
 
 @mcp.tool()
