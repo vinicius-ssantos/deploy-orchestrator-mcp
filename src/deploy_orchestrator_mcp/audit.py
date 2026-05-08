@@ -161,7 +161,10 @@ class SupabaseAuditLog:
         metadata = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
         row = {
             "event_type": event.get("type"),
-            "created_at": event.get("created_at"),
+            # Do not send event.created_at to the database. Audit payloads are
+            # redacted before persistence, and redaction may replace timestamps
+            # with placeholders that are not valid timestamptz values. Let the
+            # audit_events.created_at default now() assign the persisted row time.
             "actor": metadata.get("actor"),
             "environment": metadata.get("environment"),
             "provider": metadata.get("provider"),

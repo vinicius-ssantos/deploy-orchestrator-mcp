@@ -22,6 +22,7 @@ def test_supabase_audit_log_record_redacts_and_inserts_row():
         requests.append(request)
         body = json.loads(request.content.decode("utf-8"))
         assert body["event_type"] == "provider.credentials.checked"
+        assert "created_at" not in body
         assert body["environment"] == "staging"
         assert body["actor"] == "chatgpt"
         assert body["payload"]["metadata"]["token"] == REDACTED
