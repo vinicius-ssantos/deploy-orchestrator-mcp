@@ -1,6 +1,11 @@
 import httpx
 
-from deploy_orchestrator_mcp.audit import SupabaseAuditLog, audit_log_list, audit_log_status, create_audit_event
+from deploy_orchestrator_mcp.audit import (
+    SupabaseAuditLog,
+    audit_log_list,
+    audit_log_status,
+    create_audit_event,
+)
 from deploy_orchestrator_mcp.redaction import REDACTED
 
 
@@ -37,13 +42,11 @@ def test_supabase_audit_log_record_redacts_and_inserts_row():
 
     assert recorded["metadata"]["token"] == REDACTED
     assert requests[0].method == "POST"
-    assert requests[0].url == "https://example.supabase.co/rest/v1/audit_events"
+    assert str(requests[0].url) == "https://example.supabase.co/rest/v1/audit_events"
     assert requests[0].headers["apikey"] == "service_role_secret"
 
 
-def test_supabase_audit_log_list_returns_redacted_payloads
-
-():
+def test_supabase_audit_log_list_returns_redacted_payloads():
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.method == "GET"
         assert "order=created_at.desc" in str(request.url)
@@ -74,7 +77,7 @@ def test_supabase_audit_log_list_returns_redacted_payloads
 
 
 def test_audit_log_status_supabase_backend_from_env(monkeypatch):
-    monkeypatch.deletenv("MCP_AUDIT_LOG_PATH", raising=False)
+    monkeypatch.delenv("MCP_AUDIT_LOG_PATH", raising=False)
     monkeypatch.setenv("MCP_AUDIT_BACKEND", "supabase")
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service_role_secret")
@@ -88,10 +91,10 @@ def test_audit_log_status_supabase_backend_from_env(monkeypatch):
 
 
 def test_audit_log_list_supabase_returns_error_when_misconfigured(monkeypatch):
-    monkeypatch.deletenv("MCP_AUDIT_LOG_PATH", raising=False)
+    monkeypatch.delenv("MCP_AUDIT_LOG_PATH", raising=False)
     monkeypatch.setenv("MCP_AUDIT_BACKEND", "supabase")
     monkeypatch.deletenv("SUPABASE_URL", raising=False)
-    monkeypatch.deletenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
 
     result = audit_log_list()
 
