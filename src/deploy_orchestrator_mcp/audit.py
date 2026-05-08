@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from deploy_orchestrator_mcp.redaction import redact
+
 MCP_AUDIT_BACKEND_ENV = "MCP_AUDIT_BACKEND"
 AUDIT_LOG_PATH_ENV = "MCP_AUDIT_LOG_PATH"
 MCP_AUDIT_SUPABASE_URL_ENV = "MCP_AUDIT_SUPABASE_URL"
@@ -17,17 +19,39 @@ DEFAULT_AUDIT_SUPABASE_TABLE = "audit_events"
 
 SUPABASE_AUDIT_SELECT = "id,created_at,event_type,actor,environment,provider,repository,payload"
 
-from deploy_orchestrator_mcp.redaction import redact
-
-
 
 def _default_now():
     return datetime.now(timezone.utc).isoformat()
 
 
+def _configured_audit_log_path() -> str | None:
+    path = os.getenv(AUDIT_LOG_PATH_ENV, "").strip()
+    return path or None
+
+
+def _supabase_audit_config() -> dict[str, Any]:
+    url = (
+        os.getenv(MCP_AUDIT_SUPABASE_URL_ENV, "").strip()
+        or os.getenv(SUPABASE_URL_ENV, "").strip()
+    )
+    key = (
+        os.getenv(MCP_AUDIT_SUPABASE_KEY_ENV, "").strip()
+        or os.getenv(SUPABASE_SERVICE_ROLE_KEY_ENV, "").strip()
+    )
+    table = (
+        os.getenv(MCP_AUDIT_SUPABASE_TABLE_ENV, DEFAULT_AUDIT_SUPABASE_TABLE).strip()
+        or DEFAULT_AUDIT_SUPABASE_TABLE
+    )
+    return {
+        "configured": bool(url and key),
+        "url": url.rstrip("/"),
+        "key": key,
+        "table": table,
+    }
+
 
 def _configured_audit_backend() -> str | None:
-    backend = os.getenv(MCP_AUDIT_BACKEND_ENV, %"").strip().lower()
+    backend = os.getenv(MCP_AUDIT_BACKEND_ENV, "").strip().lower()
     if backend in {"jsonl", "supabase"}:
         return backend
     if _configured_audit_log_path():
@@ -37,36 +61,8 @@ def _configured_audit_backend() -> str | None:
     return None
 
 
-def _configured_audit_log_path() -> str | None:
-    path = os.getenv(AUDIT_LOG_PATH_ENV, "").strip()
-    return path or None
-
-
-
-def _supabase_audit_config() ) -> dict[str, Any]:
-    url = (
-        os.getenv(MCP_AUDIT_SUPABASE_URL_ENV, "").strip()
-        or os.getenv(SUPABASE_URL_ENV, "").strip()
-    )
-    key = (
-        os.getenv(MCP_AUDIT_SUPABASE_KEY_ENV, "").strip()
-        or os.getenv(SUPABASE_SERVICE_ROLE_KEY_ENV,€¢").strip()
-    )
-    table = os.getenv(
-        MCP_AUDIT_SUPABASE_TABLE_ENV, DEFAULT_AUDIT_SUPABASE_TABLE
-    ).strip() or DEFAULT_AUDIT_SUPABASE_TABLE
-    return {
-        "configured": bool(url and key),
-        "url": url.rstrip("/"),
-        "key": key,
-        "table": table,
-    }
-
-
-
 def _rest_endpoint(supabase_url: str, table: str) -> str:
     return f"{supabase_url.rstrip('/')}/rest/v1/{table}"
-
 
 
 def _supabase_headers(key: str) -> dict[str, str]:
@@ -142,12 +138,26 @@ class SupabaseAuditLog:
         self.table = table
         self._client = client
 
-    def _client(key_id):
-        raise NotImplementedError
+    def _request(self, method: str, *, json_body=None, params=None) -> httpx.Response:
+        endpoint = _rest_endpoint(self.supabase_url, self.table)
+        if self._client is not None:
+            return self._client.request(
+                method,
+                endpoint,
+                headers=_supabase_headers(self.key),
+                json=json_body,
+                params=params,
+            )
+        return httpx.request(
+            method,
+            endpoint,
+            headers=_supabase_headers(self.key),
+            json=json_body,
+            params=params,
+            timeout=30.0,
+        )
 
-    def _build_row(
-        self, event: dict[str, Any]
-    ) -> dict[str, Any]:
+    def _build_row(self, event: dict[str, Any]) -> dict[str, Any]:
         metadata = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
         row = {
             "event_type": event.get("type"),
@@ -163,12 +173,7 @@ class SupabaseAuditLog:
     def record(self, event: dict[str, Any]) -> dict[str, Any]:
         redacted_event = redact(event)
         row = redact(self._build_row(redacted_event))
-        response = httpx.post(
-            _rest_endpoint(self.supabase_url, self.table),
-            headers=_supabase_headers(self.key),
-            json=row,
-            timeout=30.0,
-        )
+        response = self._request("POST", json_body=row)
         response.raise_for_status()
         try:
             body = response.json()
@@ -183,15 +188,13 @@ class SupabaseAuditLog:
         if safe_limit == 0:
             return []
 
-        response = httpx.get(
-            _rest_endpoint(self.supabase_url, self.table),
-            headers=_supabase_headers(self.key),
+        response = self._request(
+            "GET",
             params={
                 "select": SUPABASE_AUDIT_SELECT,
                 "order": "created_at.desc",
                 "limit": safe_limit,
             },
-            timeout=30.0,
         )
         response.raise_for_status()
         try:
@@ -205,7 +208,7 @@ class SupabaseAuditLog:
                 payload = row.get("payload")
                 if isinstance(payload, dict):
                     events.append(redact(payload))
-        return events[::}-1]
+        return events[::-1]
 
     def status(self) -> dict[str, Any]:
         return {
@@ -241,8 +244,6 @@ def _persist_if_configured(event: dict[str, Any]) -> None:
     try:
         audit_log.record(event)
     except (OSError, httpx.HTTPError, httpx.TimeoutException):
-        # Audit persistence should not break the user-facing operation.
-        # Failures are exposed via audit_log_status/list when operators troubleshoot.
         return
 
 
@@ -256,7 +257,6 @@ def create_audit_event(event_type, metadata=None, now=None):
     }
     _persist_if_configured(event)
     return event
-
 
 
 def create_plan_audit_event(plan, now=None):
@@ -273,9 +273,7 @@ def create_plan_audit_event(plan, now=None):
         "policy_valid": policy_result.get("valid"),
         "policy_errors": policy_result.get("errors", []),
         "approval_required": plan.get("approval_required"),
-        "approval_required_actions": plan.get(
-            "approval_required_actions", []
-        ),
+        "approval_required_actions": plan.get("approval_required_actions", []),
         "risks": plan.get("risks", []),
     }
 
@@ -300,12 +298,15 @@ def audit_log_status() -> dict[str, Any]:
                 "configured": False,
                 "table": config["table"],
                 "errors": [
-                    "Supabase audit backend requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY ("
-                    "or MCP_AUDIT_SUPABASE_URL / MCP_AUDIT_SUPABASE_KEY)."
+                    "Supabase audit backend requires SUPABASE_URL and "
+                    "SUPABASE_SERVICE_ROLE_KEY (or MCP_AUDIT_SUPABASE_URL / "
+                    "MCP_AUDIT_SUPABASE_KEY)."
                 ],
             }
         return SupabaseAuditLog(
-            supabase_url=config["url"], key=config["key"], table=config["table"]
+            supabase_url=config["url"],
+            key=config["key"],
+            table=config["table"],
         ).status()
 
     return {
@@ -341,7 +342,9 @@ def audit_log_list(limit: int = 50) -> dict[str, Any]:
             }
         try:
             events = SupabaseAuditLog(
-                supabase_url=config["url"], key=config["key"], table=config["table"]
+                supabase_url=config["url"],
+                key=config["key"],
+                table=config["table"],
             ).list(limit=safe_limit)
         except (httpx.HTTPError, httpx.TimeoutException) as exc:
             return {
