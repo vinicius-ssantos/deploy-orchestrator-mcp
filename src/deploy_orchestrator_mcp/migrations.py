@@ -35,7 +35,7 @@ def _build_migration_plan(
     app_provider: str,
     database_provider: str | None,
     policy: dict | None,
-}) -> dict[str, Any]:
+) -> dict[str, Any]:
     policy_result = evaluate_policy(
         policy or DEFAULT_POLICY,
         environment=environment,
