@@ -1,3 +1,5 @@
+import json
+
 import httpx
 
 from deploy_orchestrator_mcp.audit import (
@@ -18,7 +20,7 @@ def test_supabase_audit_log_record_redacts_and_inserts_row():
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        body = request.json()
+        body = json.loads(request.content.decode("utf-8"))
         assert body["event_type"] == "provider.credentials.checked"
         assert body["environment"] == "staging"
         assert body["actor"] == "chatgpt"
@@ -93,8 +95,10 @@ def test_audit_log_status_supabase_backend_from_env(monkeypatch):
 def test_audit_log_list_supabase_returns_error_when_misconfigured(monkeypatch):
     monkeypatch.delenv("MCP_AUDIT_LOG_PATH", raising=False)
     monkeypatch.setenv("MCP_AUDIT_BACKEND", "supabase")
-    monkeypatch.deletenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    monkeypatch.delenv("MCP_AUDIT_SUPABASE_URL", raising=False)
+    monkeypatch.delenv("MCP_AUDIT_SUPABASE_KEY", raising=False)
 
     result = audit_log_list()
 
