@@ -300,9 +300,13 @@ def render_deploy_staging(
     if not gate["allowed"]:
         return redact(
             {
+                "ok": False,
+                "allowed": False,
                 "provider": "render",
                 "triggered": False,
                 "deploy_id": None,
+                "errors": gate.get("errors", gate.get("reasons", [])),
+                "missing_fields": gate.get("missing_fields", []),
                 "gate": gate,
                 "audit_event": create_audit_event(
                     "render.deploy.blocked",
@@ -311,6 +315,7 @@ def render_deploy_staging(
                         "operation": "deploy_staging",
                         "service_id": service_id,
                         "reasons": gate.get("reasons", []),
+                        "missing_fields": gate.get("missing_fields", []),
                     },
                 ),
             }
@@ -600,9 +605,12 @@ def render_rollback_staging(
 
     if not _approval_present(approval):
         return redact({
+            "ok": False,
+            "allowed": False,
             "provider": "render",
             "rolled_back": False,
             "errors": ["approval='APPROVED' is required to rollback"],
+            "missing_fields": ["approval"],
             "audit_event": create_audit_event(
                 "render.rollback.blocked",
                 {"provider": "render", "reason": "missing_approval",
@@ -612,9 +620,12 @@ def render_rollback_staging(
 
     if confirm != CONFIRM_DESTRUCTIVE:
         return redact({
+            "ok": False,
+            "allowed": False,
             "provider": "render",
             "rolled_back": False,
             "errors": [f"confirm='{CONFIRM_DESTRUCTIVE}' is required to rollback"],
+            "missing_fields": ["confirm"],
             "audit_event": create_audit_event(
                 "render.rollback.blocked",
                 {"provider": "render", "reason": "missing_confirm",

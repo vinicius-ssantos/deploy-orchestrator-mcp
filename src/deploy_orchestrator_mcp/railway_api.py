@@ -444,9 +444,13 @@ def railway_deploy(
     gate = evaluate_execution_gate(deploy_plan, approval=approval, mode="execute", ci_gate=ci_gate)
     if not gate["allowed"]:
         return redact({
+            "ok": False,
+            "allowed": False,
             "provider": "railway",
             "triggered": False,
             "deployment_id": None,
+            "errors": gate.get("errors", gate.get("reasons", [])),
+            "missing_fields": gate.get("missing_fields", []),
             "gate": gate,
             "audit_event": create_audit_event(
                 "railway.deploy.blocked",
@@ -455,6 +459,7 @@ def railway_deploy(
                     "operation": "deploy",
                     "service_id": service_id,
                     "reasons": gate.get("reasons", []),
+                    "missing_fields": gate.get("missing_fields", []),
                 },
             ),
         })

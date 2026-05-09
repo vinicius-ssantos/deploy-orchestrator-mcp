@@ -17,28 +17,42 @@ def _approval_present(approval):
 
 
 def _validate_ci_gate(ci_gate):
-    """Validate the ci_gate dict. Returns a list of blocking reasons (empty = ok)."""
+    """Validate the ci_gate dict. Returns a list of (reason, missing_fields) tuples."""
     if ci_gate is None:
-        return ["ci_gate is required for execute mode"]
+        return [("ci_gate is required for execute mode", ["ci_gate_allowed", "ci_gate_head_sha"])]
     if not ci_gate.get("head_sha"):
-        return ["ci_gate.head_sha is required"]
+        return [("ci_gate.head_sha is required", ["ci_gate_head_sha"])]
     if not ci_gate.get("allowed"):
         reason = ci_gate.get("reason", "CI checks did not pass")
-        return [f"CI gate blocked: {reason}"]
+        return [(f"CI gate blocked: {reason}", [])]
     return []
+
+
+def _collect_missing_fields(reasons_with_fields):
+    seen = set()
+    result = []
+    for _, fields in reasons_with_fields:
+        for f in fields:
+            if f not in seen:
+                seen.add(f)
+                result.append(f)
+    return result
 
 
 def evaluate_execution_gate(plan, approval=None, mode=None, ci_gate=None):
     """Return a structured decision for whether a deployment plan can execute."""
     requested_mode = mode or plan.get("mode", "dry-run")
-    reasons = []
+    reasons_with_fields: list[tuple[str, list[str]]] = []
 
     if requested_mode == "dry-run":
         return {
+            "ok": True,
             "allowed": True,
             "mode": "dry-run",
             "requires_approval": False,
             "reasons": [],
+            "errors": [],
+            "missing_fields": [],
             "audit_event": create_audit_event(
                 "deployment.execution.allowed",
                 {
@@ -51,25 +65,30 @@ def evaluate_execution_gate(plan, approval=None, mode=None, ci_gate=None):
         }
 
     # CI gate is mandatory for execute mode
-    reasons.extend(_validate_ci_gate(ci_gate))
+    reasons_with_fields.extend(_validate_ci_gate(ci_gate))
 
     if not _policy_valid(plan):
-        reasons.append("policy validation failed")
+        reasons_with_fields.append(("policy validation failed", []))
 
     if _is_production(plan) and not _approval_present(approval):
-        reasons.append("production execution requires explicit approval")
+        reasons_with_fields.append(("production execution requires explicit approval", ["approval"]))
 
     if plan.get("approval_required") and not _approval_present(approval):
-        reasons.append("approval required")
+        reasons_with_fields.append(("approval required", ["approval"]))
 
+    reasons = [r for r, _ in reasons_with_fields]
+    missing_fields = _collect_missing_fields(reasons_with_fields)
     allowed = len(reasons) == 0
     decision = "allowed" if allowed else "blocked"
 
     return {
+        "ok": allowed,
         "allowed": allowed,
         "mode": requested_mode,
         "requires_approval": plan.get("approval_required", False),
         "reasons": reasons,
+        "errors": reasons,
+        "missing_fields": missing_fields,
         "audit_event": create_audit_event(
             f"deployment.execution.{decision}",
             {
