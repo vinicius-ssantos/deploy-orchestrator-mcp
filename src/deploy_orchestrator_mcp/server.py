@@ -396,9 +396,20 @@ def render_deploy_staging(
     service_id: str,
     approval: str | bool | None = None,
     clear_cache: bool = False,
-    ci_gate: dict | None = None,
+    ci_gate_allowed: bool | None = None,
+    ci_gate_head_sha: str | None = None,
+    ci_gate_reason: str | None = None,
+    ci_gate_checked_at: str | None = None,
 ):
     """Trigger a Render staging deploy after approval and CI gate validation."""
+    ci_gate = None
+    if ci_gate_allowed is not None or ci_gate_head_sha is not None:
+        ci_gate = {
+            "allowed": ci_gate_allowed,
+            "head_sha": ci_gate_head_sha,
+            "reason": ci_gate_reason,
+            "checked_at": ci_gate_checked_at,
+        }
     return render_api_deploy_staging(
         service_id=service_id,
         approval=approval,
