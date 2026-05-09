@@ -282,9 +282,22 @@ def policy_evaluate(
     environment: str,
     app_provider: str,
     database_provider: str | None = None,
-    policy: dict | None = None,
+    policy_json: str | None = None,
 ):
-    """Evaluate repository deployment policy for a planned deployment."""
+    """Evaluate repository deployment policy for a planned deployment.
+
+    policy_json: optional JSON string of a policy object (as returned by policy_load).
+    Omit to use the default policy.
+    """
+    import json
+
+    policy: dict | None = None
+    if policy_json:
+        try:
+            policy = json.loads(policy_json)
+        except json.JSONDecodeError as exc:
+            return {"ok": False, "error": f"invalid policy_json: {exc}"}
+
     return evaluate_policy(
         policy=policy,
         environment=environment,
@@ -484,7 +497,7 @@ def render_rollback_staging(
 @mcp.tool()
 def render_run_task(
     task_slug: str,
-    input_data: dict | list | None = None,
+    input_data_json: str | None = None,
     wait: bool = True,
     environment: str = "staging",
     approval: str | None = None,
@@ -492,9 +505,19 @@ def render_run_task(
     """Trigger a Render Workflow task (e.g. migrations, smoke tests).
 
     task_slug format: "workflow-slug/task-name"
+    input_data_json: optional JSON string (object or array) passed to the workflow task.
     Production environments require approval='APPROVED'.
     Set wait=False to start the task and return immediately with the task_run_id.
     """
+    import json
+
+    input_data = None
+    if input_data_json:
+        try:
+            input_data = json.loads(input_data_json)
+        except json.JSONDecodeError as exc:
+            return {"ok": False, "error": f"invalid input_data_json: {exc}"}
+
     return render_workflows_run_task(
         task_slug=task_slug,
         input_data=input_data,
@@ -513,16 +536,52 @@ def render_task_status(task_run_id: str):
 @mcp.tool()
 def run_staging_migration(
     task_slug: str,
-    ci_gate: dict,
+    ci_gate_allowed: bool | None = None,
+    ci_gate_head_sha: str | None = None,
+    ci_gate_reason: str | None = None,
+    ci_gate_checked_at: str | None = None,
     approval: str | None = None,
     environment: str = "staging",
     app_provider: str = "render",
     database_provider: str | None = "supabase",
-    policy: dict | None = None,
-    input_data: dict | list | None = None,
+    policy_json: str | None = None,
+    input_data_json: str | None = None,
     wait: bool = True,
 ):
-    """Run a staging-first migration task with approval, policy, CI and audit gates."""
+    """Run a staging-first migration task with approval, policy, CI and audit gates.
+
+    ci_gate_allowed: whether CI checks passed (required for execute mode).
+    ci_gate_head_sha: commit SHA that was checked by CI (required).
+    ci_gate_reason: human-readable reason for allow/block decision.
+    ci_gate_checked_at: ISO-8601 timestamp of when CI gate was evaluated.
+    policy_json: optional JSON string of policy object (from policy_load). Uses default if omitted.
+    input_data_json: optional JSON string (object or array) passed to the workflow task.
+    """
+    import json
+
+    ci_gate = None
+    if ci_gate_allowed is not None or ci_gate_head_sha is not None:
+        ci_gate = {
+            "allowed": ci_gate_allowed,
+            "head_sha": ci_gate_head_sha,
+            "reason": ci_gate_reason,
+            "checked_at": ci_gate_checked_at,
+        }
+
+    policy: dict | None = None
+    if policy_json:
+        try:
+            policy = json.loads(policy_json)
+        except json.JSONDecodeError as exc:
+            return {"ok": False, "error": f"invalid policy_json: {exc}"}
+
+    input_data = None
+    if input_data_json:
+        try:
+            input_data = json.loads(input_data_json)
+        except json.JSONDecodeError as exc:
+            return {"ok": False, "error": f"invalid input_data_json: {exc}"}
+
     return migrations_run_staging_migration(
         task_slug=task_slug,
         ci_gate=ci_gate,
