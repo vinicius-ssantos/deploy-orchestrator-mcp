@@ -214,6 +214,49 @@ def server_auth_status():
     return auth_status()
 
 
+@mcp.tool()
+def server_status():
+    """Return runtime info: version, commit SHA, uptime, schema version, and credential status.
+
+    Use this tool to verify the server is running the expected version after a deploy,
+    or to check which providers have credentials configured before attempting a deploy.
+    """
+    import importlib.metadata
+
+    try:
+        version = importlib.metadata.version("deploy-orchestrator-mcp")
+    except importlib.metadata.PackageNotFoundError:
+        version = "unknown"
+
+    import asyncio
+    import hashlib
+
+    async def _schema_version():
+        tool_names = sorted(t.name for t in await mcp.list_tools())
+        return hashlib.sha256(" ".join(tool_names).encode()).hexdigest()[:8]
+
+    try:
+        schema_version = asyncio.get_event_loop().run_until_complete(_schema_version())
+    except RuntimeError:
+        schema_version = "unavailable"
+
+    commit_sha = (
+        os.getenv("RENDER_GIT_COMMIT")
+        or os.getenv("GIT_COMMIT")
+        or "unknown"
+    )
+
+    return {
+        "ok": True,
+        "service": "deploy-orchestrator-mcp",
+        "version": version,
+        "tool_schema_version": schema_version,
+        "commit_sha": commit_sha,
+        "uptime_seconds": int(time.time() - _START_TIME),
+        "credentials_configured": credential_status(),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Credential management
 # ---------------------------------------------------------------------------
