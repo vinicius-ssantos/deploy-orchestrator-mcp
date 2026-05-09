@@ -396,12 +396,14 @@ def render_deploy_staging(
     service_id: str,
     approval: str | bool | None = None,
     clear_cache: bool = False,
+    ci_gate: dict | None = None,
 ):
-    """Trigger a Render staging deploy after approval gate validation."""
+    """Trigger a Render staging deploy after approval and CI gate validation."""
     return render_api_deploy_staging(
         service_id=service_id,
         approval=approval,
         clear_cache=clear_cache,
+        ci_gate=ci_gate,
     )
 
 

@@ -58,6 +58,6 @@ After starting the MCP server, run this sequence from your MCP client:
 
 1. `render_validate_credentials`
 2. `render_list_services`
-3. `render_deploy_staging(service_id="srv_xxx", approval="APPROVED")`
+3. `render_deploy_staging(service_id="srv_xxx", approval="APPROVED", ci_gate={"allowed": true, "head_sha": "abc123"})`
 4. `render_get_deploy_status(service_id="srv_xxx", deploy_id="dep_xxx")`
 5. `render_healthcheck(url="https://your-service.onrender.com/healthz")`
