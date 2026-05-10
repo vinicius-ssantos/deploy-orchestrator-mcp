@@ -6,6 +6,8 @@ from deploy_orchestrator_mcp.policy import (
     is_app_provider_allowed_by_policy,
     is_database_provider_allowed_by_policy,
     is_environment_allowed_by_policy,
+    is_frontend_environment_allowed_by_policy,
+    is_frontend_provider_allowed_by_policy,
     parse_repo_policy,
     production_requires_approval,
 )
@@ -161,3 +163,42 @@ def test_evaluate_policy_production_allowed_when_policy_permits():
     result = evaluate_policy(policy, "production", "render")
     assert result["valid"] is True
     assert result["production_requires_approval"] is True
+
+
+# ---------------------------------------------------------------------------
+# Frontend policy tests
+# ---------------------------------------------------------------------------
+
+
+def test_frontend_provider_allowed_by_default():
+    assert is_frontend_provider_allowed_by_policy(DEFAULT_POLICY, "vercel") is True
+    assert is_frontend_provider_allowed_by_policy(DEFAULT_POLICY, "netlify") is True
+    assert is_frontend_provider_allowed_by_policy(DEFAULT_POLICY, "cloudflare_pages") is True
+
+
+def test_unknown_frontend_provider_blocked():
+    assert is_frontend_provider_allowed_by_policy(DEFAULT_POLICY, "unknown-static") is False
+
+
+def test_frontend_preview_allowed_by_default():
+    assert is_frontend_environment_allowed_by_policy(DEFAULT_POLICY, "preview") is True
+
+
+def test_frontend_staging_allowed_by_default():
+    assert is_frontend_environment_allowed_by_policy(DEFAULT_POLICY, "staging") is True
+
+
+def test_frontend_production_blocked_by_default():
+    assert is_frontend_environment_allowed_by_policy(DEFAULT_POLICY, "production") is False
+
+
+def test_frontend_production_allowed_via_custom_policy():
+    custom_policy = {
+        **DEFAULT_POLICY,
+        "frontend": {
+            "production_allowed": True,
+            "require_approval": True,
+            "allowed_environments": ["preview", "staging", "production"],
+        },
+    }
+    assert is_frontend_environment_allowed_by_policy(custom_policy, "production") is True

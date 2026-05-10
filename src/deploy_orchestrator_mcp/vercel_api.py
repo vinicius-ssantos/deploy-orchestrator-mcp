@@ -194,7 +194,10 @@ def vercel_deploy_preview(
     """Trigger a Vercel preview deployment via gitSource. Never targets production."""
     resolved_token = _vercel_token(token)
     if not resolved_token:
-        return _missing_token_result("deploy_preview")
+        result = _missing_token_result("deploy_preview")
+        result["triggered"] = False
+        result["environment"] = "preview"
+        return result
 
     resolved_team_id = _team_id(team_id)
 
