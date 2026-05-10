@@ -11,9 +11,15 @@ DEFAULT_POLICY = {
     "allowed_environments": ["preview", "staging"],
     "allowed_app_providers": ["render", "railway", "fly", "koyeb", "coolify"],
     "allowed_database_providers": ["supabase", "same-provider-postgres"],
+    "allowed_frontend_providers": ["vercel", "netlify", "cloudflare_pages"],
     "production": {
         "allowed": False,
         "requires_approval": True,
+    },
+    "frontend": {
+        "production_allowed": False,
+        "require_approval": True,
+        "allowed_environments": ["preview", "staging"],
     },
     "rules": {
         "require_dry_run_first": True,
@@ -75,6 +81,19 @@ def is_app_provider_allowed_by_policy(policy, provider):
 def is_database_provider_allowed_by_policy(policy, provider):
     allowed = get_policy_value(policy, "allowed_database_providers") or []
     return provider in allowed
+
+
+def is_frontend_provider_allowed_by_policy(policy, provider):
+    allowed = get_policy_value(policy, "allowed_frontend_providers") or []
+    return provider in allowed
+
+
+def is_frontend_environment_allowed_by_policy(policy, environment):
+    frontend = get_policy_value(policy, "frontend") or {}
+    if environment == "production":
+        return frontend.get("production_allowed", False) is True
+    allowed = frontend.get("allowed_environments", ["preview", "staging"])
+    return environment in allowed
 
 
 def production_requires_approval(policy):

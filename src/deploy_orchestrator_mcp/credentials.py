@@ -7,11 +7,13 @@ _PROVIDER_ENV_VARS: dict[str, str] = {
     "koyeb": "KOYEB_API_TOKEN",
     "coolify": "COOLIFY_API_TOKEN",
     "supabase": "SUPABASE_ACCESS_TOKEN",
+    "vercel": "VERCEL_TOKEN",
 }
 
 _EXTRA_ENV_VARS: dict[str, str] = {
     "coolify_base_url": "COOLIFY_BASE_URL",
     "supabase_org_id": "SUPABASE_ORG_ID",
+    "vercel_team_id": "VERCEL_TEAM_ID",
 }
 
 _ALL_ENV_VARS = {**_PROVIDER_ENV_VARS, **_EXTRA_ENV_VARS}

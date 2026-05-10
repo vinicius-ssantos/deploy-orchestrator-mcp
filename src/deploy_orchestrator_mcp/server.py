@@ -76,6 +76,13 @@ from deploy_orchestrator_mcp.supabase_provider import (
     supabase_generate_project_plan,
     supabase_validate_request,
 )
+from deploy_orchestrator_mcp.vercel_api import (
+    check_public_env_vars as vercel_api_check_public_env_vars,
+    vercel_deploy_preview as vercel_api_deploy_preview,
+    vercel_get_deploy_status as vercel_api_get_deploy_status,
+    vercel_project_plan as vercel_api_project_plan,
+    vercel_validate_credentials as vercel_api_validate_credentials,
+)
 
 mcp = FastMCP("deploy-orchestrator-mcp")
 
@@ -930,6 +937,151 @@ def supabase_get_connection_info(project_id: str):
 def supabase_healthcheck(project_id: str):
     """Check reachability of a Supabase project REST API."""
     return supabase_api_healthcheck(project_id)
+
+
+# ---------------------------------------------------------------------------
+# Vercel — frontend/static hosting (Phase 6)
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def vercel_validate_credentials():
+    """Validate Vercel token without exposing it. Read-only."""
+    return vercel_api_validate_credentials()
+
+
+@mcp.tool()
+def vercel_project_plan(
+    project_name: str,
+    repo: str,
+    branch: str,
+    framework: str = "vite",
+    build_command: str = "npm run build",
+    output_dir: str = "dist",
+    env_var_names: list[str] | None = None,
+):
+    """Dry-run plan for a Vercel frontend deployment. No infrastructure is created.
+
+    env_var_names: optional list of env var names to check for sensitive VITE_*/NEXT_PUBLIC_* exposure.
+    """
+    return vercel_api_project_plan(
+        project_name=project_name,
+        repo=repo,
+        branch=branch,
+        framework=framework,
+        build_command=build_command,
+        output_dir=output_dir,
+        env_var_names=env_var_names or [],
+    )
+
+
+@mcp.tool()
+def vercel_deploy_preview(
+    project_name: str,
+    repo: str,
+    repo_id: str,
+    branch: str,
+    approval: str,
+    ci_gate: dict | bool | None = None,
+    framework: str = "vite",
+    build_command: str = "npm run build",
+    output_dir: str = "dist",
+    env_var_names: list[str] | None = None,
+):
+    """Trigger a real Vercel preview deployment via gitSource. Requires approval='APPROVED' and ci_gate.
+
+    ci_gate: dict with {allowed, head_sha} or True to indicate CI passed.
+    env_var_names: optional list of env var names to validate before deploying.
+    repo_id: GitHub repository numeric ID (required for gitSource).
+    """
+    from deploy_orchestrator_mcp.audit import create_audit_event
+    from deploy_orchestrator_mcp.execution import APPROVAL_TOKEN, _approval_present, _validate_ci_gate
+    from deploy_orchestrator_mcp.policy import is_frontend_environment_allowed_by_policy
+    from deploy_orchestrator_mcp.redaction import redact
+
+    if not _approval_present(approval):
+        return redact({
+            "ok": False,
+            "allowed": False,
+            "provider": "vercel",
+            "triggered": False,
+            "errors": ["approval='APPROVED' is required to trigger a Vercel preview deploy"],
+            "missing_fields": ["approval"],
+            "audit_event": create_audit_event(
+                "vercel.deploy.blocked",
+                {"provider": "vercel", "operation": "deploy_preview", "reason": "missing_approval",
+                 "project_name": project_name, "branch": branch},
+            ),
+        })
+
+    # Normalise ci_gate: accept True (boolean shorthand from UI clients) or a full dict.
+    if ci_gate is True:
+        ci_gate = {"allowed": True, "head_sha": "frontend-preview"}
+    elif not ci_gate:
+        ci_gate = None
+
+    ci_errors = _validate_ci_gate(ci_gate)
+    if ci_errors:
+        reasons = [r for r, _ in ci_errors]
+        return redact({
+            "ok": False,
+            "allowed": False,
+            "provider": "vercel",
+            "triggered": False,
+            "errors": reasons,
+            "missing_fields": ["ci_gate"],
+            "audit_event": create_audit_event(
+                "vercel.deploy.blocked",
+                {"provider": "vercel", "operation": "deploy_preview", "reason": "ci_gate_failed",
+                 "project_name": project_name, "branch": branch},
+            ),
+        })
+
+    if not is_frontend_environment_allowed_by_policy(None, "preview"):
+        return redact({
+            "ok": False,
+            "allowed": False,
+            "provider": "vercel",
+            "triggered": False,
+            "errors": ["Frontend preview deployments are blocked by policy"],
+            "audit_event": create_audit_event(
+                "vercel.deploy.blocked",
+                {"provider": "vercel", "operation": "deploy_preview", "reason": "policy_blocked",
+                 "project_name": project_name},
+            ),
+        })
+
+    env_check = vercel_api_check_public_env_vars(env_var_names or [])
+    if not env_check["ok"]:
+        return redact({
+            "ok": False,
+            "allowed": False,
+            "provider": "vercel",
+            "triggered": False,
+            "errors": [env_check["message"]],
+            "public_env_check": env_check,
+            "audit_event": create_audit_event(
+                "vercel.deploy.blocked",
+                {"provider": "vercel", "operation": "deploy_preview", "reason": "sensitive_env_vars",
+                 "exposed_candidates": env_check["exposed_candidates"], "project_name": project_name},
+            ),
+        })
+
+    return vercel_api_deploy_preview(
+        project_name=project_name,
+        repo=repo,
+        repo_id=repo_id,
+        branch=branch,
+        framework=framework,
+        build_command=build_command,
+        output_dir=output_dir,
+    )
+
+
+@mcp.tool()
+def vercel_get_deploy_status(deployment_id: str):
+    """Read current status of a Vercel deployment. Read-only."""
+    return vercel_api_get_deploy_status(deployment_id=deployment_id)
 
 
 # ---------------------------------------------------------------------------

@@ -67,11 +67,25 @@ DATABASE_PROVIDERS = {
     },
 }
 
+FRONTEND_PROVIDERS = {
+    "vercel": {
+        "kind": "frontend-static",
+        "supports_git_deploy": True,
+        "supports_preview_deployments": True,
+        "supports_staging_deployments": True,
+        "supports_production_deployments": True,
+        "supports_env_vars": True,
+        "supports_build_logs": True,
+        "best_for": ["vite", "react", "static-site", "preview", "dogfooding"],
+    },
+}
+
 
 def list_provider_capabilities():
     return {
         "app_providers": APP_PROVIDERS,
         "database_providers": DATABASE_PROVIDERS,
+        "frontend_providers": FRONTEND_PROVIDERS,
         "mode": "dry-run",
     }
 
@@ -81,4 +95,6 @@ def get_provider_capability(provider):
         return APP_PROVIDERS[provider]
     if provider in DATABASE_PROVIDERS:
         return DATABASE_PROVIDERS[provider]
+    if provider in FRONTEND_PROVIDERS:
+        return FRONTEND_PROVIDERS[provider]
     return None
