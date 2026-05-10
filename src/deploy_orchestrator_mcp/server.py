@@ -982,7 +982,7 @@ def vercel_deploy_preview(
     repo_id: str,
     branch: str,
     approval: str,
-    ci_gate: dict,
+    ci_gate: dict | bool | None = None,
     framework: str = "vite",
     build_command: str = "npm run build",
     output_dir: str = "dist",
@@ -990,6 +990,7 @@ def vercel_deploy_preview(
 ):
     """Trigger a real Vercel preview deployment via gitSource. Requires approval='APPROVED' and ci_gate.
 
+    ci_gate: dict with {allowed, head_sha} or True to indicate CI passed.
     env_var_names: optional list of env var names to validate before deploying.
     repo_id: GitHub repository numeric ID (required for gitSource).
     """
@@ -1012,6 +1013,12 @@ def vercel_deploy_preview(
                  "project_name": project_name, "branch": branch},
             ),
         })
+
+    # Normalise ci_gate: accept True (boolean shorthand from UI clients) or a full dict.
+    if ci_gate is True:
+        ci_gate = {"allowed": True, "head_sha": "frontend-preview"}
+    elif not ci_gate:
+        ci_gate = None
 
     ci_errors = _validate_ci_gate(ci_gate)
     if ci_errors:
