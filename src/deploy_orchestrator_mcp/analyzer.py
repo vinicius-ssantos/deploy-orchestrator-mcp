@@ -1,3 +1,28 @@
+def _detect_frontend(names: set) -> dict:
+    if "package.json" not in names:
+        return {"is_frontend": False, "framework": None, "build_command": None, "output_dir": None, "recommended_providers": []}
+
+    if "vite.config.ts" in names or "vite.config.js" in names:
+        return {
+            "is_frontend": True,
+            "framework": "vite",
+            "build_command": "npm run build",
+            "output_dir": "dist",
+            "recommended_providers": ["vercel", "netlify", "cloudflare_pages"],
+        }
+
+    if "next.config.js" in names or "next.config.ts" in names or "next.config.mjs" in names:
+        return {
+            "is_frontend": True,
+            "framework": "nextjs",
+            "build_command": "npm run build",
+            "output_dir": None,
+            "recommended_providers": ["vercel"],
+        }
+
+    return {"is_frontend": False, "framework": None, "build_command": None, "output_dir": None, "recommended_providers": []}
+
+
 def analyze_file_list(files):
     names = set(files)
 
@@ -30,11 +55,14 @@ def analyze_file_list(files):
     if "pyproject.toml" in names and "render.yaml" in names:
         framework = "python-http-service"
 
+    frontend = _detect_frontend(names)
+
     return {
         "runtime": runtime,
         "framework": framework,
         "has_dockerfile": has_dockerfile,
         "needs_database": needs_database,
         "needs_supabase": needs_supabase,
+        "frontend": frontend,
         "detected_files": sorted(files),
     }
