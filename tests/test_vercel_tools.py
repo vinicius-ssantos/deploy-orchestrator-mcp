@@ -11,8 +11,8 @@ DEFAULT_ARGS = {
 }
 
 
-def _call(***coverrides):
-    args = {**DEFAULT_ARGS, }
+def _call(**overrides):
+    args = {**DEFAULT_ARGS}
     args.update(overrides)
     return server.vercel_deploy_preview(**args)
 
@@ -24,14 +24,12 @@ def test_vercel_deploy_preview_blocks_without_approval():
     assert "approval" in result["missing_fields"]
 
 
-
 def test_vercel_deploy_preview_blocks_when_ci_gate_fails():
     result = _call(approval="APPROVED", ci_gate_allowed=False, ci_gate_reason="checks failed")
     assert result["ok"] is False
     assert result["triggered"] is False
     assert "ci_gate" in result["missing_fields"]
     assert any("CI gate" in error for error in result["errors"])
-
 
 
 def test_vercel_deploy_preview_blocks_sensitive_public_env_vars():
@@ -74,6 +72,6 @@ def test_vercel_deploy_preview_calls_api_when_gates_pass(monkeypatch):
         env_var_names=["VITE_DEFAULT_MCP_URL"],
     )
     assert result["ok"] is True
-    assert captured["project_name"] == DEFAULT_ARGS["project_name"]
-    assert captured["repo_id"] == DEFAULT_ARGS["repo_id"]
-    assert captured["branch"] == DEFAULT_ARGS["branch"]
+    assert captured["project_name"] == DEFAULTARGS["project_name"]
+    assert captured["repo_id"] == DEFAULTARGS["repo_id"]
+    assert captured["branch"] == DEFAULTARGS["branch"]
