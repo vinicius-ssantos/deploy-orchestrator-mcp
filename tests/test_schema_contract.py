@@ -102,6 +102,15 @@ def test_run_staging_migration_no_dict_params(mcp_tools):
     assert "input_data_json" in props, "input_data_json missing from run_staging_migration"
 
 
+def test_vercel_deploy_preview_ci_gate_fields(mcp_tools):
+    """vercel_deploy_preview must expose primitive ci_gate fields, not ci_gate: dict|bool."""
+    props = mcp_tools["vercel_deploy_preview"].inputSchema.get("properties", {})
+    assert "ci_gate" not in props, "bare/union ci_gate must not appear in vercel_deploy_preview"
+    assert "ci_gate_allowed" in props, "ci_gate_allowed missing from vercel_deploy_preview"
+    assert "ci_gate_head_sha" in props, "ci_gate_head_sha missing from vercel_deploy_preview"
+    assert "ci_gate_reason" in props, "ci_gate_reason missing from vercel_deploy_preview"
+
+
 # ---------------------------------------------------------------------------
 # Sanity: required tools are present in the manifest
 # ---------------------------------------------------------------------------
@@ -123,6 +132,10 @@ EXPECTED_TOOLS = [
     "policy_load",
     "server_auth_status",
     "credentials_status",
+    "vercel_validate_credentials",
+    "vercel_project_plan",
+    "vercel_deploy_preview",
+    "vercel_get_deploy_status",
 ]
 
 

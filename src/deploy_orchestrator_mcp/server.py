@@ -982,21 +982,26 @@ def vercel_deploy_preview(
     repo_id: str,
     branch: str,
     approval: str,
-    ci_gate: dict | bool | None = None,
+    ci_gate_allowed: bool = False,
+    ci_gate_head_sha: str | None = None,
+    ci_gate_reason: str | None = None,
     framework: str = "vite",
     build_command: str = "npm run build",
     output_dir: str = "dist",
     env_var_names: list[str] | None = None,
 ):
-    """Trigger a real Vercel preview deployment via gitSource. Requires approval='APPROVED' and ci_gate.
+    """Trigger a real Vercel preview deployment via gitSource.
 
-    ci_gate: dict with {allowed, head_sha} or True to indicate CI passed.
+    Requires approval='APPROVED' and a primitive CI gate contract.
     env_var_names: optional list of env var names to validate before deploying.
     repo_id: GitHub repository numeric ID (required for gitSource).
     """
     from deploy_orchestrator_mcp.audit import create_audit_event
-    from deploy_orchestrator_mcp.execution import APPROVAL_TOKEN, _approval_present, _validate_ci_gate
-    from deploy_orchestrator_mcp.policy import is_frontend_environment_allowed_by_policy
+    from deploy_orchestrator_mcp.execution import _approval_present, _validate_ci_gate
+    from deploy_orchestrator_mcp.policy import (
+        is_frontend_environment_allowed_by_policy,
+        is_frontend_provider_allowed_by_policy,
+    )
     from deploy_orchestrator_mcp.redaction import redact
 
     if not _approval_present(approval):
@@ -1014,11 +1019,12 @@ def vercel_deploy_preview(
             ),
         })
 
-    # Normalise ci_gate: accept True (boolean shorthand from UI clients) or a full dict.
-    if ci_gate is True:
-        ci_gate = {"allowed": True, "head_sha": "frontend-preview"}
-    elif not ci_gate:
-        ci_gate = None
+    ci_gate = {
+        "allowed": ci_gate_allowed,
+        "head_sha": ci_gate_head_sha or "frontend-preview",
+    }
+    if ci_gate_reason:
+        ci_gate["reason"] = ci_gate_reason
 
     ci_errors = _validate_ci_gate(ci_gate)
     if ci_errors:
@@ -1034,6 +1040,20 @@ def vercel_deploy_preview(
                 "vercel.deploy.blocked",
                 {"provider": "vercel", "operation": "deploy_preview", "reason": "ci_gate_failed",
                  "project_name": project_name, "branch": branch},
+            ),
+        })
+
+    if not is_frontend_provider_allowed_by_policy(None, "vercel"):
+        return redact({
+            "ok": False,
+            "allowed": False,
+            "provider": "vercel",
+            "triggered": False,
+            "errors": ["Frontend provider 'vercel' is blocked by policy"],
+            "audit_event": create_audit_event(
+                "vercel.deploy.blocked",
+                {"provider": "vercel", "operation": "deploy_preview", "reason": "provider_policy_blocked",
+                 "project_name": project_name},
             ),
         })
 
