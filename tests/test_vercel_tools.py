@@ -72,6 +72,6 @@ def test_vercel_deploy_preview_calls_api_when_gates_pass(monkeypatch):
         env_var_names=["VITE_DEFAULT_MCP_URL"],
     )
     assert result["ok"] is True
-    assert captured["project_name"] == DEFAULTARGS["project_name"]
-    assert captured["repo_id"] == DEFAULTARGS["repo_id"]
-    assert captured["branch"] == DEFAULTARGS["branch"]
+    assert captured["project_name"] == DEFAULT_ARGS["project_name"]
+    assert captured["repo_id"] == DEFAULT_ARGS["repo_id"]
+    assert captured["branch"] == DEFAULT_ARGS["branch"]
