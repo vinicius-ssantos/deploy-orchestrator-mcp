@@ -1,6 +1,6 @@
 """Tests for Vercel MCP tool gates."""
 
-from deploy_orchestrator_mcp import server as server
+from deploy_orchestrator_mcp import policy, server
 
 
 DEFAULT_ARGS = {
@@ -48,10 +48,9 @@ def test_vercel_deploy_preview_blocks_sensitive_public_env_vars():
 
 def test_vercel_deploy_preview_blocks_when_provider_policy_denies(monkeypatch):
     monkeypatch.setattr(
-        server,
+        policy,
         "is_frontend_provider_allowed_by_policy",
-        lambda policy, provider: False,
-        raising=False,
+        lambda repo_policy, provider: False,
     )
     result = _call(approval="APPROVED", ci_gate_allowed=True)
     assert result["ok"] is False
