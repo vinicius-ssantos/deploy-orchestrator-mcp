@@ -1,4 +1,4 @@
-from deploy_orchestrator_mcp.redaction import REDACTED, is_sensitive_key, redact
+from deploy_orchestrator_mcp.redaction import REDACTED, is_sensitive_key, is_safe_public_url, redact
 
 
 def test_sensitive_keys_are_redacted():
@@ -67,3 +67,32 @@ def test_sensitive_key_detection_handles_common_variants():
     assert is_sensitive_key("DATABASE_URL") is True
     assert is_sensitive_key("service_role_key") is True
     assert is_sensitive_key("public_url") is False
+
+
+def test_public_vercel_deployment_url_and_id_are_not_redacted():
+    data = {
+        "provider": "vercel",
+        "deployment_id": "dpl_6f5a1e2c3b4d5a6f7e8d9c0b",
+        "url": "https://deploy-orchestrator-mcp-frontend.vercel.app/",
+        "preview_url": "https://deploy-orchestrator-mcp-frontend-git-main-vinicius.vercel.app/",
+    }
+
+    assert redact(data) == data
+
+
+def test_public_url_with_embedded_credentials_is_redacted():
+    data = {
+        "url": "https://user:password@example.com/path",
+        "public_url": "https://example.com?token=abc123",
+    }
+
+    redacted = redact(data)
+
+    assert redacted["url"] == REDACTED
+    assert redacted["public_url"] == REDACTED
+
+
+def test_safe_public_url_helper_blocks_sensitive_query_params():
+    assert is_safe_public_url("https://example.com/deploy") is True
+    assert is_safe_public_url("https://example.com/deploy?token=abc") is False
+    assert is_safe_public_url("https://user:pass@example.com/deploy") is False
