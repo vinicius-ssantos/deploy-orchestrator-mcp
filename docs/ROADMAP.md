@@ -44,13 +44,14 @@ Notes:
 - Tests mock the Render API with `httpx.MockTransport`; CI does not call Render.
 - Operational validation completed on 2026-05-06.
 
-## Phase 3 — Railway and Supabase (real API)
+## Phase 3 — Railway, Supabase and migrations (real API)
 
 - [x] Railway app provider with real API (`railway_deploy`, `railway_get_deploy_status`, `railway_healthcheck`)
 - [x] Railway Postgres provisioning with approval gate (`railway_provision_postgres`)
 - [x] Supabase real API — validate, list orgs/projects, status, connection info, healthcheck
+- [x] Migration execution guardrails (`run_staging_migration`) — staging-first, approval, policy, CI and audit gates
 - [ ] Supabase write actions (create project, apply migrations) — requires approval gate
-- [ ] Migration execution tool (staging-first, with audit)
+- [ ] Operational migration validation with a real Render Workflow task slug (#63)
 
 ## Phase 4 — Koyeb, Fly and Coolify (real API)
 
@@ -63,6 +64,30 @@ Notes:
 
 - [x] CI gate before execute (`ci_gate.allowed` required in execute mode, closes #25)
 - [x] CI gate contract documented in `docs/INTEGRATION.md` (closes #24)
-- [ ] Persistent audit log (issue #30)
-- [ ] Per-repository policy files (`.deploy-orchestrator/policy.yml`) (issue #31)
+- [x] Persistent audit log support (`jsonl` and Supabase backends)
+- [x] Per-repository policy files (`.deploy-orchestrator/policy.yml`) via `policy_load`
+- [x] Runtime credential store (`credentials_set`, `credentials_clear`, `credentials_status`)
+- [ ] Runtime audit backend activation/ops validation
 - [ ] GitHub issue/PR reporting via github-unified-mcp integration
+
+## Phase 6 — Frontend / Static Hosting providers
+
+- [x] Frontend provider registry (`frontend_providers`) with Vercel
+- [x] Vite and Next.js frontend detection in `repo_analyze`
+- [x] Vercel credential validation (`vercel_validate_credentials`)
+- [x] Vercel dry-run project plan (`vercel_project_plan`)
+- [x] Vercel preview deploy with approval + CI gate (`vercel_deploy_preview`)
+- [x] Vercel deploy status lookup (`vercel_get_deploy_status`)
+- [x] Public env var exposure guard for `VITE_*`, `NEXT_PUBLIC_*`, `REACT_APP_*`, `PUBLIC_*`
+- [x] Redaction fix for safe public Vercel URLs and deployment IDs (#84/#85)
+- [ ] Operational Vercel preview validation with real `VERCEL_TOKEN`
+- [ ] Frontend UI for Vercel Preview Deploy in `deploy-orchestrator-mcp-frontend`
+
+## Phase 7+ — Future providers
+
+- [ ] Netlify frontend provider
+- [ ] Cloudflare Pages frontend provider
+- [ ] Koyeb provider with real API
+- [ ] Fly.io provider with real API
+- [ ] Coolify provider with real API
+- [ ] Provider-specific rollback plans
