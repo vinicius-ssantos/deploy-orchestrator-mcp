@@ -96,3 +96,15 @@ def test_safe_public_url_helper_blocks_sensitive_query_params():
     assert is_safe_public_url("https://example.com/deploy") is True
     assert is_safe_public_url("https://example.com/deploy?token=abc") is False
     assert is_safe_public_url("https://user:pass@example.com/deploy") is False
+
+
+def test_public_url_with_secret_like_query_value_is_redacted():
+    signed_url = (
+        "https://example.com/deploy?signature="
+        "abc1234567890abc1234567890abc1234567890"
+    )
+
+    redacted = redact({"url": signed_url})
+
+    assert is_safe_public_url(signed_url) is False
+    assert redacted["url"] == REDACTED
