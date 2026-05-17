@@ -85,8 +85,8 @@ def is_safe_public_url(value):
     if parsed.username or parsed.password or "@" in parsed.netloc:
         return False
 
-    for key, _ in parse_qsl(parsed.query, keep_blank_values=True):
-        if is_sensitive_key(key):
+    for key, query_value in parse_qsl(parsed.query, keep_blank_values=True):
+        if is_sensitive_key(key) or looks_sensitive_value(query_value):
             return False
 
     return True
