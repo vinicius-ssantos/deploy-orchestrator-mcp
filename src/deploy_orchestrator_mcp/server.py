@@ -1275,12 +1275,12 @@ def vercel_delete_deployment(
     confirm: str,
     reason: str,
     previous_url: str | None = None,
-    target: str | None = None,
+    target: str,
 ):
     """Delete a Vercel deployment after explicit destructive-operation confirmation.
 
-    Requires approval='APPROVED' and confirm='CONFIRM_DESTRUCTIVE_OPERATION'.
-    Refuses target='production' to avoid accidental production deletion.
+    Requires approval='APPROVED', confirm='CONFIRM_DESTRUCTIVE_OPERATION',
+    and target='preview'. Production or unknown targets are blocked by default.
     """
     from deploy_orchestrator_mcp.audit import create_audit_event
     from deploy_orchestrator_mcp.execution import _approval_present
@@ -1328,17 +1328,17 @@ def vercel_delete_deployment(
             ),
         })
 
-    if (target or "").lower() == "production":
+    if target.lower() != "preview":
         return redact({
             "ok": False,
             "deleted": False,
             "provider": "vercel",
             "deployment_id": deployment_id,
             "previous_url": previous_url,
-            "errors": ["Refusing to delete target='production' deployment without a dedicated production-deletion policy"],
+            "errors": ["Refusing to delete Vercel deployment unless target='preview' is explicitly provided"],
             "audit_event": create_audit_event(
                 "vercel.deployment.delete.blocked",
-                {"provider": "vercel", "operation": "delete_deployment", "deployment_id": deployment_id, "reason": "production_target_blocked"},
+                {"provider": "vercel", "operation": "delete_deployment", "deployment_id": deployment_id, "reason": "non_preview_target_blocked", "target": target},
             ),
         })
 
