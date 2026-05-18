@@ -5,6 +5,7 @@ import pytest
 
 from deploy_orchestrator_mcp.vercel_api import (
     check_public_env_vars,
+    vercel_delete_deployment,
     vercel_deploy_preview,
     vercel_get_deploy_status,
     vercel_project_plan,
@@ -342,3 +343,77 @@ def test_get_deploy_status_api_error(monkeypatch):
 
     assert result["ok"] is False
     assert "errors" in result
+
+
+# ---------------------------------------------------------------------------
+# vercel_delete_deployment
+# ---------------------------------------------------------------------------
+
+
+def test_delete_deployment_missing_token(monkeypatch):
+    monkeypatch.delenv("VERCEL_TOKEN", raising=False)
+    result = vercel_delete_deployment(deployment_id="dpl_abc", reason="cleanup")
+    assert result["ok"] is False
+    assert result["deleted"] is False
+    assert result["deployment_id"] == "dpl_abc"
+    assert "errors" in result
+
+
+def test_delete_deployment_success(monkeypatch):
+    monkeypatch.setenv("VERCEL_TOKEN", "tok_delete")
+
+    def handler(request):
+        assert request.method == "DELETE"
+        assert "/v13/deployments/dpl_delete_me" in str(request.url)
+        assert request.headers["Authorization"] == "Bearer tok_delete"
+        return httpx.Response(204)
+
+    with _mock_client(handler) as client:
+        result = vercel_delete_deployment(
+            deployment_id="dpl_delete_me",
+            previous_url="https://app-preview.vercel.app",
+            reason="preview cleanup after validation",
+            client=client,
+        )
+
+    assert result["ok"] is True
+    assert result["deleted"] is True
+    assert result["deployment_id"] == "dpl_delete_me"
+    assert result["previous_url"] == "https://app-preview.vercel.app"
+    assert result["provider_status_code"] == 204
+    assert "audit_event" in result
+
+
+def test_delete_deployment_not_found(monkeypatch):
+    monkeypatch.setenv("VERCEL_TOKEN", "tok")
+
+    def handler(request):
+        return httpx.Response(404, json={"error": {"code": "not_found"}})
+
+    with _mock_client(handler) as client:
+        result = vercel_delete_deployment(
+            deployment_id="dpl_gone",
+            reason="cleanup stale preview",
+            client=client,
+        )
+
+    assert result["ok"] is False
+    assert result["deleted"] is False
+    assert result["provider_status_code"] == 404
+    assert "errors" in result
+
+
+def test_delete_deployment_token_not_in_response(monkeypatch):
+    monkeypatch.setenv("VERCEL_TOKEN", "secret_delete_token")
+
+    def handler(request):
+        return httpx.Response(204)
+
+    with _mock_client(handler) as client:
+        result = vercel_delete_deployment(
+            deployment_id="dpl_secret",
+            reason="cleanup",
+            client=client,
+        )
+
+    assert "secret_delete_token" not in str(result)
