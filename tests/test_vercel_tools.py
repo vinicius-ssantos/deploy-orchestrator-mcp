@@ -75,3 +75,66 @@ def test_vercel_deploy_preview_calls_api_when_gates_pass(monkeypatch):
     assert captured["project_name"] == DEFAULT_ARGS["project_name"]
     assert captured["repo_id"] == DEFAULT_ARGS["repo_id"]
     assert captured["branch"] == DEFAULT_ARGS["branch"]
+
+
+# ---------------------------------------------------------------------------
+# vercel_delete_deployment gates
+# ---------------------------------------------------------------------------
+
+
+def _delete_call(**overrides):
+    args = {
+        "deployment_id": "dpl_123",
+        "approval": "APPROVED",
+        "confirm": "CONFIRM_DESTRUCTIVE_OPERATION",
+        "reason": "preview cleanup after validation",
+        "previous_url": "https://app-preview.vercel.app",
+        "target": "preview",
+    }
+    args.update(overrides)
+    return server.vercel_delete_deployment(**args)
+
+
+def test_vercel_delete_deployment_blocks_without_approval():
+    result = _delete_call(approval="NO")
+    assert result["ok"] is False
+    assert result["deleted"] is False
+    assert "approval" in result["missing_fields"]
+
+
+def test_vercel_delete_deployment_blocks_without_confirm():
+    result = _delete_call(confirm="NO")
+    assert result["ok"] is False
+    assert result["deleted"] is False
+    assert "confirm" in result["missing_fields"]
+
+
+def test_vercel_delete_deployment_blocks_without_reason():
+    result = _delete_call(reason="  ")
+    assert result["ok"] is False
+    assert result["deleted"] is False
+    assert "reason" in result["missing_fields"]
+
+
+def test_vercel_delete_deployment_blocks_non_preview_target():
+    result = _delete_call(target="production")
+    assert result["ok"] is False
+    assert result["deleted"] is False
+    assert any("target='preview'" in error for error in result["errors"])
+
+
+def test_vercel_delete_deployment_calls_api_when_gates_pass(monkeypatch):
+    captured = {}
+
+    def fake_delete_deployment(**args):
+        captured.update(args)
+        return {"ok": True, "deleted": True, "deployment_id": args["deployment_id"]}
+
+    monkeypatch.setattr(server, "vercel_api_delete_deployment", fake_delete_deployment)
+
+    result = _delete_call(reason=" cleanup after smoke test ")
+    assert result["ok"] is True
+    assert result["deleted"] is True
+    assert captured["deployment_id"] == "dpl_123"
+    assert captured["reason"] == "cleanup after smoke test"
+    assert captured["previous_url"] == "https://app-preview.vercel.app"
