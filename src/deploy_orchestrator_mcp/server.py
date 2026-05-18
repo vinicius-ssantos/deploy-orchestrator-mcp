@@ -1274,8 +1274,8 @@ def vercel_delete_deployment(
     approval: str,
     confirm: str,
     reason: str,
-    previous_url: str | None = None,
     target: str,
+    previous_url: str | None = None,
 ):
     """Delete a Vercel deployment after explicit destructive-operation confirmation.
 
