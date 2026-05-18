@@ -65,6 +65,8 @@ from deploy_orchestrator_mcp.render_workflows import (
     render_run_task as render_workflows_run_task,
 )
 from deploy_orchestrator_mcp.supabase_api import (
+    supabase_apply_migration as supabase_api_apply_migration,
+    supabase_create_project as supabase_api_create_project,
     supabase_get_connection_info as supabase_api_get_connection_info,
     supabase_get_project_status as supabase_api_get_project_status,
     supabase_healthcheck as supabase_api_healthcheck,
@@ -76,6 +78,7 @@ from deploy_orchestrator_mcp.supabase_provider import (
     supabase_generate_project_plan,
     supabase_validate_request,
 )
+from deploy_orchestrator_mcp.summary import github_comment_body_for_deployment_plan
 from deploy_orchestrator_mcp.vercel_api import (
     check_public_env_vars as vercel_api_check_public_env_vars,
     vercel_deploy_preview as vercel_api_deploy_preview,
@@ -419,6 +422,52 @@ def deploy_generate_plan(
     """Generate a dry-run deployment plan from repository file paths."""
     analysis = analyze_file_list(files)
     return generate_deployment_plan(analysis, environment=environment, policy=policy)
+
+
+@mcp.tool()
+def github_prepare_plan_report(
+    plan_json: str,
+    repo_full_name: str,
+    target_type: str = "issue",
+    target_number: int | None = None,
+):
+    """Build a redacted markdown report for a GitHub issue/PR comment.
+
+    This tool does not post to GitHub directly. It returns a deterministic
+    comment body intended to be sent via github-unified-mcp comment tools.
+    """
+    import json
+
+    from deploy_orchestrator_mcp.audit import create_audit_event
+    from deploy_orchestrator_mcp.redaction import redact
+
+    if target_type not in {"issue", "pull_request"}:
+        return {
+            "ok": False,
+            "error": "target_type must be 'issue' or 'pull_request'",
+        }
+
+    try:
+        plan = json.loads(plan_json)
+    except json.JSONDecodeError as exc:
+        return {"ok": False, "error": f"invalid plan_json: {exc}"}
+
+    body = github_comment_body_for_deployment_plan(plan)
+    return redact({
+        "ok": True,
+        "repo_full_name": repo_full_name,
+        "target_type": target_type,
+        "target_number": target_number,
+        "comment_body": body,
+        "audit_event": create_audit_event(
+            "github.report.prepared",
+            {
+                "repo_full_name": repo_full_name,
+                "target_type": target_type,
+                "target_number": target_number,
+            },
+        ),
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -937,6 +986,120 @@ def supabase_get_connection_info(project_id: str):
 def supabase_healthcheck(project_id: str):
     """Check reachability of a Supabase project REST API."""
     return supabase_api_healthcheck(project_id)
+
+
+@mcp.tool()
+def supabase_create_project(
+    project_name: str,
+    organization_id: str,
+    region: str = "us-east-1",
+    approval: str | bool | None = None,
+    ci_gate_allowed: bool | None = None,
+    ci_gate_head_sha: str | None = None,
+    ci_gate_reason: str | None = None,
+    ci_gate_checked_at: str | None = None,
+    environment: str = "staging",
+    policy_json: str | None = None,
+):
+    """Create a Supabase project with approval, policy and CI gate validation."""
+    import json
+
+    ci_gate = None
+    if ci_gate_allowed is not None or ci_gate_head_sha is not None:
+        ci_gate = {
+            "allowed": ci_gate_allowed,
+            "head_sha": ci_gate_head_sha,
+            "reason": ci_gate_reason,
+            "checked_at": ci_gate_checked_at,
+        }
+
+    policy: dict | None = None
+    if policy_json:
+        try:
+            policy = json.loads(policy_json)
+        except json.JSONDecodeError as exc:
+            return {"ok": False, "error": f"invalid policy_json: {exc}"}
+
+    policy_result = evaluate_policy(
+        policy=policy,
+        environment=environment,
+        app_provider="supabase",
+        database_provider="supabase",
+    )
+    plan = {
+        "provider": "supabase",
+        "environment": environment,
+        "mode": "execute",
+        "policy_result": policy_result,
+        "approval_required": True,
+        "approval_required_actions": ["create Supabase project"],
+    }
+
+    return supabase_api_create_project(
+        project_name=project_name,
+        organization_id=organization_id,
+        region=region,
+        plan=plan,
+        approval=approval,
+        ci_gate=ci_gate,
+    )
+
+
+@mcp.tool()
+def supabase_apply_migration(
+    project_id: str,
+    migration_name: str,
+    sql: str,
+    approval: str | bool | None = None,
+    ci_gate_allowed: bool | None = None,
+    ci_gate_head_sha: str | None = None,
+    ci_gate_reason: str | None = None,
+    ci_gate_checked_at: str | None = None,
+    environment: str = "staging",
+    policy_json: str | None = None,
+):
+    """Apply SQL migration in Supabase with approval, policy and CI gate validation."""
+    import json
+
+    ci_gate = None
+    if ci_gate_allowed is not None or ci_gate_head_sha is not None:
+        ci_gate = {
+            "allowed": ci_gate_allowed,
+            "head_sha": ci_gate_head_sha,
+            "reason": ci_gate_reason,
+            "checked_at": ci_gate_checked_at,
+        }
+
+    policy: dict | None = None
+    if policy_json:
+        try:
+            policy = json.loads(policy_json)
+        except json.JSONDecodeError as exc:
+            return {"ok": False, "error": f"invalid policy_json: {exc}"}
+
+    policy_result = evaluate_policy(
+        policy=policy,
+        environment=environment,
+        app_provider="supabase",
+        database_provider="supabase",
+    )
+    plan = {
+        "provider": "supabase",
+        "environment": environment,
+        "mode": "execute",
+        "policy_result": policy_result,
+        "approval_required": True,
+        "approval_required_actions": ["apply database migration"],
+    }
+
+    return supabase_api_apply_migration(
+        project_id=project_id,
+        migration_name=migration_name,
+        sql=sql,
+        plan=plan,
+        approval=approval,
+        ci_gate=ci_gate,
+    )
 
 
 # ---------------------------------------------------------------------------

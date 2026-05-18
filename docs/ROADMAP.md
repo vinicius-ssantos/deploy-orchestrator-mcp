@@ -50,7 +50,7 @@ Notes:
 - [x] Railway Postgres provisioning with approval gate (`railway_provision_postgres`)
 - [x] Supabase real API — validate, list orgs/projects, status, connection info, healthcheck
 - [x] Migration execution guardrails (`run_staging_migration`) — staging-first, approval, policy, CI and audit gates
-- [ ] Supabase write actions (create project, apply migrations) — requires approval gate
+- [x] Supabase write actions (create project, apply migrations) — approval + policy + CI gate
 - [ ] Operational migration validation with a real Render Workflow task slug (#63)
 
 ## Phase 4 — Koyeb, Fly and Coolify (real API)
@@ -68,7 +68,8 @@ Notes:
 - [x] Per-repository policy files (`.deploy-orchestrator/policy.yml`) via `policy_load`
 - [x] Runtime credential store (`credentials_set`, `credentials_clear`, `credentials_status`)
 - [ ] Runtime audit backend activation/ops validation
-- [ ] GitHub issue/PR reporting via github-unified-mcp integration
+- [x] GitHub issue/PR reporting helper (`github_prepare_plan_report`)
+- [ ] Automatic posting flow wiring in orchestrated runtime (via github-unified-mcp)
 
 ## Phase 6 — Frontend / Static Hosting providers
 

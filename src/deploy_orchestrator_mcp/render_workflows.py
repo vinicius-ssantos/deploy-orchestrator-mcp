@@ -139,10 +139,17 @@ def render_list_task_runs(
         return _missing_api_key_result("list task runs")
 
     try:
-        from render_sdk.client.types import ListTaskRunsParams
-
         svc = _sync_workflows(key)
-        results = svc.list_task_runs(ListTaskRunsParams(limit=limit))
+        # Keep runtime compatibility with SDK variants and simplify tests that
+        # mock only the service layer.
+        try:
+            from render_sdk.client.types import ListTaskRunsParams
+
+            query = ListTaskRunsParams(limit=limit)
+        except Exception:
+            query = {"limit": limit}
+
+        results = svc.list_task_runs(query)
     except Exception as exc:
         return _sdk_error_result("list_task_runs", exc)
 
