@@ -151,8 +151,8 @@ Cada slice deve estar com testes passando antes de iniciar o próximo. Slices pa
 
 | Slice | Issue | Status |
 |---|---|---|
-| S1 — Stack Detection | #TBD | Aberto |
-| S2 — Plan Generation | #TBD | Aberto |
-| S3 — Execution Gate | #TBD | Aberto |
-| S4 — Render Deploy | #TBD | Aberto |
-| S5 — Rollback Staging | #TBD | Aberto |
+| S1 — Stack Detection | #87 | Aberto |
+| S2 — Plan Generation | #88 | Aberto |
+| S3 — Execution Gate | #89 | Aberto |
+| S4 — Render Deploy | #90 | Aberto |
+| S5 — Rollback Staging | #91 | Aberto |
