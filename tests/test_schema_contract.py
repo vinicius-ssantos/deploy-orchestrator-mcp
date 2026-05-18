@@ -111,6 +111,24 @@ def test_vercel_deploy_preview_ci_gate_fields(mcp_tools):
     assert "ci_gate_reason" in props, "ci_gate_reason missing from vercel_deploy_preview"
 
 
+def test_supabase_create_project_ci_gate_fields(mcp_tools):
+    """supabase_create_project must expose primitive ci_gate fields, not ci_gate: dict."""
+    props = mcp_tools["supabase_create_project"].inputSchema.get("properties", {})
+    assert "ci_gate" not in props, "bare ci_gate dict must not appear in supabase_create_project"
+    assert "ci_gate_allowed" in props, "ci_gate_allowed missing from supabase_create_project"
+    assert "ci_gate_head_sha" in props, "ci_gate_head_sha missing from supabase_create_project"
+    assert "policy_json" in props, "policy_json missing from supabase_create_project"
+
+
+def test_supabase_apply_migration_ci_gate_fields(mcp_tools):
+    """supabase_apply_migration must expose primitive ci_gate fields, not ci_gate: dict."""
+    props = mcp_tools["supabase_apply_migration"].inputSchema.get("properties", {})
+    assert "ci_gate" not in props, "bare ci_gate dict must not appear in supabase_apply_migration"
+    assert "ci_gate_allowed" in props, "ci_gate_allowed missing from supabase_apply_migration"
+    assert "ci_gate_head_sha" in props, "ci_gate_head_sha missing from supabase_apply_migration"
+    assert "policy_json" in props, "policy_json missing from supabase_apply_migration"
+
+
 # ---------------------------------------------------------------------------
 # Sanity: required tools are present in the manifest
 # ---------------------------------------------------------------------------
@@ -130,8 +148,11 @@ EXPECTED_TOOLS = [
     "audit_log_list",
     "policy_evaluate",
     "policy_load",
+    "github_prepare_plan_report",
     "server_auth_status",
     "credentials_status",
+    "supabase_create_project",
+    "supabase_apply_migration",
     "vercel_validate_credentials",
     "vercel_project_plan",
     "vercel_deploy_preview",

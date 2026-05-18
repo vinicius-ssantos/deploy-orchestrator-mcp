@@ -58,6 +58,12 @@ Supabase tools:
 - `supabase_get_project_status` — get project status
 - `supabase_get_connection_info` — safe connection metadata (no secrets returned)
 - `supabase_healthcheck` — REST API reachability check
+- `supabase_create_project` — create project (requires `approval="APPROVED"` + `ci_gate`)
+- `supabase_apply_migration` — apply SQL migration (requires `approval="APPROVED"` + `ci_gate`)
+
+GitHub reporting helper:
+
+- `github_prepare_plan_report` — generates deterministic redacted markdown for issue/PR comments (posting is done via `github-unified-mcp`)
 
 Fly.io tools:
 

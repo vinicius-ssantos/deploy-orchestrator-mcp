@@ -4,6 +4,8 @@ import httpx
 import pytest
 
 from deploy_orchestrator_mcp.supabase_api import (
+    supabase_apply_migration,
+    supabase_create_project,
     supabase_get_connection_info,
     supabase_get_project_status,
     supabase_healthcheck,
@@ -286,3 +288,82 @@ def test_healthcheck_api_error(monkeypatch):
 
     assert result["healthy"] is False
     assert "errors" in result
+
+
+# ---------------------------------------------------------------------------
+# Supabase write actions (approval + CI gate)
+# ---------------------------------------------------------------------------
+
+
+def test_create_project_blocks_without_gate():
+    result = supabase_create_project(
+        "my-app",
+        "org-1",
+        approval="NO",
+        ci_gate=None,
+    )
+    assert result["created"] is False
+    assert result["gate"]["allowed"] is False
+
+
+def test_create_project_happy_path(monkeypatch):
+    monkeypatch.setenv("SUPABASE_ACCESS_TOKEN", "sbp_test_token_0000000000000000")
+
+    def handler(request):
+        assert request.url.path == "/v1/projects"
+        payload = request.read().decode("utf-8")
+        assert "my-app" in payload
+        return httpx.Response(201, json={
+            "id": "proj-1",
+            "name": "my-app",
+            "organization_id": "org-1",
+            "region": "us-east-1",
+            "status": "INACTIVE",
+        })
+
+    with _mock_client(handler) as client:
+        result = supabase_create_project(
+            "my-app",
+            "org-1",
+            approval="APPROVED",
+            ci_gate={"allowed": True, "head_sha": "abc123"},
+            client=client,
+        )
+
+    assert result["created"] is True
+    assert result["project_id"] == "proj-1"
+
+
+def test_apply_migration_blocks_when_sql_missing():
+    result = supabase_apply_migration(
+        "proj-1",
+        "m1",
+        "",
+        approval="APPROVED",
+        ci_gate={"allowed": True, "head_sha": "abc123"},
+    )
+    assert result["applied"] is False
+    assert "sql is required" in result["errors"]
+
+
+def test_apply_migration_happy_path(monkeypatch):
+    monkeypatch.setenv("SUPABASE_ACCESS_TOKEN", "sbp_test_token_0000000000000000")
+
+    def handler(request):
+        assert request.url.path == "/v1/projects/proj-1/database/query"
+        payload = request.read().decode("utf-8")
+        assert "create table" in payload.lower()
+        return httpx.Response(200, json={"ok": True})
+
+    with _mock_client(handler) as client:
+        result = supabase_apply_migration(
+            "proj-1",
+            "m1",
+            "create table test(id int);",
+            approval="APPROVED",
+            ci_gate={"allowed": True, "head_sha": "abc123"},
+            client=client,
+        )
+
+    assert result["applied"] is True
+    assert result["result"]["ok"] is True
