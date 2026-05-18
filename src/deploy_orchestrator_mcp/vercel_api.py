@@ -296,6 +296,93 @@ def vercel_deploy_preview(
             http_client.close()
 
 
+def vercel_delete_deployment(
+    *,
+    deployment_id: str,
+    reason: str,
+    previous_url: str | None = None,
+    token: str | None = None,
+    team_id: str | None = None,
+    client: httpx.Client | None = None,
+) -> dict[str, Any]:
+    """Delete a Vercel deployment after destructive-operation gates pass upstream."""
+    resolved_token = _vercel_token(token)
+    if not resolved_token:
+        result = _missing_token_result("delete_deployment")
+        result["deleted"] = False
+        result["deployment_id"] = deployment_id
+        return result
+
+    resolved_team_id = _team_id(team_id)
+    params: dict[str, str] = {}
+    if resolved_team_id:
+        params["teamId"] = resolved_team_id
+
+    owns_client = client is None
+    http_client = client or httpx.Client(base_url=VERCEL_API_BASE_URL, timeout=15.0)
+
+    try:
+        response = http_client.delete(
+            f"/v13/deployments/{deployment_id}",
+            headers=_headers(resolved_token),
+            params=params or None,
+        )
+        audit_event = create_audit_event(
+            "vercel.deployment.deleted",
+            {
+                "provider": "vercel",
+                "operation": "delete_deployment",
+                "deployment_id": deployment_id,
+                "status_code": response.status_code,
+                "reason": reason,
+            },
+        )
+
+        if response.is_error:
+            try:
+                err_body = response.json()
+            except ValueError:
+                err_body = {"text": response.text[:200]}
+            return redact({
+                "provider": "vercel",
+                "ok": False,
+                "deleted": False,
+                "deployment_id": deployment_id,
+                "previous_url": previous_url,
+                "provider_status_code": response.status_code,
+                "errors": [f"HTTP {response.status_code}", err_body],
+                "audit_event": audit_event,
+            })
+
+        return redact({
+            "provider": "vercel",
+            "ok": True,
+            "deleted": True,
+            "deployment_id": deployment_id,
+            "previous_url": previous_url,
+            "provider_status_code": response.status_code,
+            "reason": reason,
+            "audit_event": audit_event,
+        })
+    except httpx.HTTPError as exc:
+        return redact({
+            "provider": "vercel",
+            "ok": False,
+            "deleted": False,
+            "deployment_id": deployment_id,
+            "previous_url": previous_url,
+            "errors": [type(exc).__name__],
+            "audit_event": create_audit_event(
+                "vercel.deployment.deleted",
+                {"provider": "vercel", "operation": "delete_deployment", "deployment_id": deployment_id, "status_code": 0, "error": type(exc).__name__},
+            ),
+        })
+    finally:
+        if owns_client:
+            http_client.close()
+
+
+
 def vercel_get_deploy_status(
     *,
     deployment_id: str,
