@@ -81,6 +81,7 @@ from deploy_orchestrator_mcp.supabase_provider import (
 from deploy_orchestrator_mcp.summary import github_comment_body_for_deployment_plan
 from deploy_orchestrator_mcp.vercel_api import (
     check_public_env_vars as vercel_api_check_public_env_vars,
+    vercel_delete_deployment as vercel_api_delete_deployment,
     vercel_deploy_preview as vercel_api_deploy_preview,
     vercel_get_deploy_status as vercel_api_get_deploy_status,
     vercel_project_plan as vercel_api_project_plan,
@@ -1265,6 +1266,87 @@ def vercel_deploy_preview(
 def vercel_get_deploy_status(deployment_id: str):
     """Read current status of a Vercel deployment. Read-only."""
     return vercel_api_get_deploy_status(deployment_id=deployment_id)
+
+
+@mcp.tool()
+def vercel_delete_deployment(
+    deployment_id: str,
+    approval: str,
+    confirm: str,
+    reason: str,
+    target: str,
+    previous_url: str | None = None,
+):
+    """Delete a Vercel deployment after explicit destructive-operation confirmation.
+
+    Requires approval='APPROVED', confirm='CONFIRM_DESTRUCTIVE_OPERATION',
+    and target='preview'. Production or unknown targets are blocked by default.
+    """
+    from deploy_orchestrator_mcp.audit import create_audit_event
+    from deploy_orchestrator_mcp.execution import _approval_present
+    from deploy_orchestrator_mcp.redaction import redact
+
+    if not _approval_present(approval):
+        return redact({
+            "ok": False,
+            "deleted": False,
+            "provider": "vercel",
+            "deployment_id": deployment_id,
+            "errors": ["approval='APPROVED' is required to delete a Vercel deployment"],
+            "missing_fields": ["approval"],
+            "audit_event": create_audit_event(
+                "vercel.deployment.delete.blocked",
+                {"provider": "vercel", "operation": "delete_deployment", "deployment_id": deployment_id, "reason": "missing_approval"},
+            ),
+        })
+
+    if confirm != "CONFIRM_DESTRUCTIVE_OPERATION":
+        return redact({
+            "ok": False,
+            "deleted": False,
+            "provider": "vercel",
+            "deployment_id": deployment_id,
+            "errors": ["confirm='CONFIRM_DESTRUCTIVE_OPERATION' is required to delete a Vercel deployment"],
+            "missing_fields": ["confirm"],
+            "audit_event": create_audit_event(
+                "vercel.deployment.delete.blocked",
+                {"provider": "vercel", "operation": "delete_deployment", "deployment_id": deployment_id, "reason": "missing_confirm"},
+            ),
+        })
+
+    if not reason or not reason.strip():
+        return redact({
+            "ok": False,
+            "deleted": False,
+            "provider": "vercel",
+            "deployment_id": deployment_id,
+            "errors": ["reason is required to delete a Vercel deployment"],
+            "missing_fields": ["reason"],
+            "audit_event": create_audit_event(
+                "vercel.deployment.delete.blocked",
+                {"provider": "vercel", "operation": "delete_deployment", "deployment_id": deployment_id, "reason": "missing_reason"},
+            ),
+        })
+
+    if target.lower() != "preview":
+        return redact({
+            "ok": False,
+            "deleted": False,
+            "provider": "vercel",
+            "deployment_id": deployment_id,
+            "previous_url": previous_url,
+            "errors": ["Refusing to delete Vercel deployment unless target='preview' is explicitly provided"],
+            "audit_event": create_audit_event(
+                "vercel.deployment.delete.blocked",
+                {"provider": "vercel", "operation": "delete_deployment", "deployment_id": deployment_id, "reason": "non_preview_target_blocked", "target": target},
+            ),
+        })
+
+    return vercel_api_delete_deployment(
+        deployment_id=deployment_id,
+        reason=reason.strip(),
+        previous_url=previous_url,
+    )
 
 
 # ---------------------------------------------------------------------------
