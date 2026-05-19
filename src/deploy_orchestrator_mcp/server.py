@@ -230,7 +230,7 @@ def server_auth_status():
 
 
 @mcp.tool()
-def server_status():
+async def server_status():
     """Return runtime info: version, commit SHA, uptime, schema version, and credential status.
 
     Use this tool to verify the server is running the expected version after a deploy,
@@ -243,17 +243,11 @@ def server_status():
     except importlib.metadata.PackageNotFoundError:
         version = "unknown"
 
-    import asyncio
-    import hashlib
-
-    async def _schema_version():
-        tool_names = sorted(t.name for t in await mcp.list_tools())
-        return hashlib.sha256(" ".join(tool_names).encode()).hexdigest()[:8]
-
-    try:
-        schema_version = asyncio.get_event_loop().run_until_complete(_schema_version())
-    except RuntimeError:
-        schema_version = "unavailable"
+    tool_schema_parts = sorted(
+        f"{t.name}:{getattr(t, 'inputSchema', None)}"
+        for t in await mcp.list_tools()
+    )
+    schema_version = hashlib.sha256(" ".join(tool_schema_parts).encode()).hexdigest()[:8]
 
     commit_sha = (
         os.getenv("RENDER_GIT_COMMIT")
