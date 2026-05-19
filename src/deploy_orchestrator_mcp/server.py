@@ -1153,6 +1153,9 @@ def vercel_deploy_preview(
     build_command: str = "npm run build",
     output_dir: str = "dist",
     env_var_names: list[str] | None = None,
+    deployment_protection: str = "none",
+    require_protection: bool = False,
+    protection_reason: str | None = None,
 ):
     """Trigger a real Vercel preview deployment via gitSource.
 
@@ -1235,6 +1238,55 @@ def vercel_deploy_preview(
             ),
         })
 
+    allowed_protection_modes = {"none", "vercel_auth", "password", "trusted_ips"}
+    if deployment_protection not in allowed_protection_modes:
+        return redact({
+            "ok": False,
+            "allowed": False,
+            "provider": "vercel",
+            "triggered": False,
+            "errors": [f"deployment_protection must be one of {sorted(allowed_protection_modes)}"],
+            "missing_fields": [],
+            "audit_event": create_audit_event(
+                "vercel.deploy.blocked",
+                {"provider": "vercel", "operation": "deploy_preview", "reason": "invalid_deployment_protection", "project_name": project_name, "deployment_protection": deployment_protection},
+            ),
+        })
+
+    protection_enabled = deployment_protection != "none"
+    bypass_ci_requested = "BYPASS_CI" in (ci_gate_reason or "").upper()
+    if require_protection and not protection_enabled:
+        return redact({
+            "ok": False,
+            "allowed": False,
+            "provider": "vercel",
+            "triggered": False,
+            "errors": ["Deployment protection is required but deployment_protection='none' was provided"],
+            "protection_enabled": False,
+            "protection_mode": deployment_protection,
+            "publicly_accessible": True,
+            "audit_event": create_audit_event(
+                "vercel.deploy.blocked",
+                {"provider": "vercel", "operation": "deploy_preview", "reason": "protection_required", "project_name": project_name},
+            ),
+        })
+
+    if bypass_ci_requested and not protection_enabled:
+        return redact({
+            "ok": False,
+            "allowed": False,
+            "provider": "vercel",
+            "triggered": False,
+            "errors": ["BYPASS_CI preview deploys require deployment_protection other than 'none'"],
+            "protection_enabled": False,
+            "protection_mode": deployment_protection,
+            "publicly_accessible": True,
+            "audit_event": create_audit_event(
+                "vercel.deploy.blocked",
+                {"provider": "vercel", "operation": "deploy_preview", "reason": "bypass_ci_without_protection", "project_name": project_name},
+            ),
+        })
+
     env_check = vercel_api_check_public_env_vars(env_var_names or [])
     if not env_check["ok"]:
         return redact({
@@ -1259,6 +1311,9 @@ def vercel_deploy_preview(
         framework=framework,
         build_command=build_command,
         output_dir=output_dir,
+        deployment_protection=deployment_protection,
+        require_protection=require_protection,
+        protection_reason=protection_reason,
     )
 
 
