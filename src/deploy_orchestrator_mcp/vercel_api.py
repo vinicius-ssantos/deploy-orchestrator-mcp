@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -190,6 +191,10 @@ def vercel_deploy_preview(
     deployment_protection: str = "none",
     require_protection: bool = False,
     protection_reason: str | None = None,
+    ttl_hours: int | None = None,
+    expires_at: str | None = None,
+    cleanup_policy: str = "warn",
+    requested_by: str | None = None,
     token: str | None = None,
     team_id: str | None = None,
     client: httpx.Client | None = None,
@@ -235,6 +240,9 @@ def vercel_deploy_preview(
         )
         status_code = response.status_code
         protection_enabled = deployment_protection != "none"
+        effective_expires_at = expires_at
+        if effective_expires_at is None and ttl_hours is not None:
+            effective_expires_at = (datetime.now(timezone.utc) + timedelta(hours=ttl_hours)).isoformat()
         audit_event = create_audit_event(
             "vercel.deploy.triggered",
             {
@@ -249,6 +257,10 @@ def vercel_deploy_preview(
                 "require_protection": require_protection,
                 "protection_reason": protection_reason,
                 "publicly_accessible": not protection_enabled,
+                "ttl_hours": ttl_hours,
+                "expires_at": effective_expires_at,
+                "cleanup_policy": cleanup_policy,
+                "requested_by": requested_by,
             },
         )
 
@@ -292,6 +304,10 @@ def vercel_deploy_preview(
                 "Preview URL may be public because deployment_protection='none'."
                 if not protection_enabled else None
             ),
+            "ttl_hours": ttl_hours,
+            "expires_at": effective_expires_at,
+            "cleanup_policy": cleanup_policy,
+            "requested_by": requested_by,
             "audit_event": audit_event,
         })
     except httpx.HTTPError as exc:

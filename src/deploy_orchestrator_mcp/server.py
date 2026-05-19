@@ -1156,6 +1156,10 @@ def vercel_deploy_preview(
     deployment_protection: str = "none",
     require_protection: bool = False,
     protection_reason: str | None = None,
+    ttl_hours: int | None = None,
+    expires_at: str | None = None,
+    cleanup_policy: str = "warn",
+    requested_by: str | None = None,
 ):
     """Trigger a real Vercel preview deployment via gitSource.
 
@@ -1255,6 +1259,52 @@ def vercel_deploy_preview(
 
     protection_enabled = deployment_protection != "none"
     bypass_ci_requested = "BYPASS_CI" in (ci_gate_reason or "").upper()
+
+    allowed_cleanup_policies = {"none", "warn", "delete_after_ttl"}
+    if cleanup_policy not in allowed_cleanup_policies:
+        return redact({
+            "ok": False,
+            "allowed": False,
+            "provider": "vercel",
+            "triggered": False,
+            "errors": [f"cleanup_policy must be one of {sorted(allowed_cleanup_policies)}"],
+            "audit_event": create_audit_event(
+                "vercel.deploy.blocked",
+                {"provider": "vercel", "operation": "deploy_preview", "reason": "invalid_cleanup_policy", "project_name": project_name, "cleanup_policy": cleanup_policy},
+            ),
+        })
+
+    effective_ttl_hours = ttl_hours
+    if effective_ttl_hours is None and bypass_ci_requested:
+        effective_ttl_hours = 24
+    if effective_ttl_hours is None and cleanup_policy == "delete_after_ttl":
+        effective_ttl_hours = 168
+    if effective_ttl_hours is not None and effective_ttl_hours <= 0:
+        return redact({
+            "ok": False,
+            "allowed": False,
+            "provider": "vercel",
+            "triggered": False,
+            "errors": ["ttl_hours must be a positive integer when provided"],
+            "audit_event": create_audit_event(
+                "vercel.deploy.blocked",
+                {"provider": "vercel", "operation": "deploy_preview", "reason": "invalid_ttl_hours", "project_name": project_name, "ttl_hours": ttl_hours},
+            ),
+        })
+
+    if bypass_ci_requested and not effective_ttl_hours:
+        return redact({
+            "ok": False,
+            "allowed": False,
+            "provider": "vercel",
+            "triggered": False,
+            "errors": ["BYPASS_CI preview deploys require ttl_hours or use the default 24 hour TTL"],
+            "audit_event": create_audit_event(
+                "vercel.deploy.blocked",
+                {"provider": "vercel", "operation": "deploy_preview", "reason": "bypass_ci_without_ttl", "project_name": project_name},
+            ),
+        })
+
     if require_protection and not protection_enabled:
         return redact({
             "ok": False,
@@ -1314,6 +1364,10 @@ def vercel_deploy_preview(
         deployment_protection=deployment_protection,
         require_protection=require_protection,
         protection_reason=protection_reason,
+        ttl_hours=effective_ttl_hours,
+        expires_at=expires_at,
+        cleanup_policy=cleanup_policy,
+        requested_by=requested_by,
     )
 
 
