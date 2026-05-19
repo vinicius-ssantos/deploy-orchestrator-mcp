@@ -187,6 +187,9 @@ def vercel_deploy_preview(
     framework: str = "vite",
     build_command: str = "npm run build",
     output_dir: str = "dist",
+    deployment_protection: str = "none",
+    require_protection: bool = False,
+    protection_reason: str | None = None,
     token: str | None = None,
     team_id: str | None = None,
     client: httpx.Client | None = None,
@@ -231,6 +234,7 @@ def vercel_deploy_preview(
             params=params or None,
         )
         status_code = response.status_code
+        protection_enabled = deployment_protection != "none"
         audit_event = create_audit_event(
             "vercel.deploy.triggered",
             {
@@ -241,6 +245,10 @@ def vercel_deploy_preview(
                 "branch": branch,
                 "environment": "preview",
                 "status_code": status_code,
+                "deployment_protection": deployment_protection,
+                "require_protection": require_protection,
+                "protection_reason": protection_reason,
+                "publicly_accessible": not protection_enabled,
             },
         )
 
@@ -277,6 +285,13 @@ def vercel_deploy_preview(
             "url": f"https://{url}" if url and not url.startswith("http") else url,
             "status": deploy_status,
             "target": "preview",
+            "protection_enabled": protection_enabled,
+            "protection_mode": deployment_protection,
+            "publicly_accessible": not protection_enabled,
+            "protection_warning": (
+                "Preview URL may be public because deployment_protection='none'."
+                if not protection_enabled else None
+            ),
             "audit_event": audit_event,
         })
     except httpx.HTTPError as exc:
