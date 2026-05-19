@@ -109,8 +109,11 @@ async def healthz(_request):
     except importlib.metadata.PackageNotFoundError:
         version = "unknown"
 
-    tool_names = sorted(t.name for t in await mcp.list_tools())
-    tool_schema_version = hashlib.sha256(" ".join(tool_names).encode()).hexdigest()[:8]
+    tool_schema_parts = sorted(
+        f"{t.name}:{getattr(t, 'inputSchema', None)}"
+        for t in await mcp.list_tools()
+    )
+    tool_schema_version = hashlib.sha256(" ".join(tool_schema_parts).encode()).hexdigest()[:8]
 
     commit_sha = (
         os.getenv("RENDER_GIT_COMMIT")
