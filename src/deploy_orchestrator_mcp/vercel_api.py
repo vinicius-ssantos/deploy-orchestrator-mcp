@@ -468,6 +468,8 @@ def vercel_get_deploy_status(
         url = body.get("url")
         created_at = body.get("createdAt")
 
+        provider_target = body.get("target")
+
         return redact({
             "provider": "vercel",
             "ok": True,
@@ -475,7 +477,13 @@ def vercel_get_deploy_status(
             "status": deploy_status,
             "url": f"https://{url}" if url and not url.startswith("http") else url,
             "created_at": created_at,
-            "target": body.get("target") or "preview",
+            "environment": "preview",
+            "target": "preview",
+            "provider_target": provider_target,
+            "target_warning": (
+                "Vercel provider target differs from deploy-orchestrator preview environment."
+                if provider_target and provider_target != "preview" else None
+            ),
             "audit_event": audit_event,
         })
     except httpx.HTTPError as exc:
