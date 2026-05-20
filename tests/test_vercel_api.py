@@ -301,7 +301,7 @@ def test_get_deploy_status_ready(monkeypatch):
             "readyState": "READY",
             "url": "app-final.vercel.app",
             "createdAt": 1700000000000,
-            "target": None,
+            "target": "production",
         })
 
     with _mock_client(handler) as client:
@@ -311,6 +311,10 @@ def test_get_deploy_status_ready(monkeypatch):
     assert result["status"] == "READY"
     assert result["deployment_id"] == "dpl_test123"
     assert result["url"].startswith("https://")
+    assert result["environment"] == "preview"
+    assert result["target"] == "preview"
+    assert result["provider_target"] == "production"
+    assert result["target_warning"] is not None
     assert "audit_event" in result
 
 
