@@ -74,6 +74,8 @@ def generate_deployment_plan(
 ):
     app_provider = recommend_app_provider(stack_profile)
     database_provider = recommend_database_provider(stack_profile)
+    provider = app_provider["provider"]
+    service_name = _service_name_from_analysis(stack_profile)
     provider_plan = _build_provider_plan(stack_profile, app_provider, database_provider, environment)
     database_plan = _build_database_plan(stack_profile, database_provider, environment)
     policy_result = evaluate_policy(
@@ -113,6 +115,8 @@ def generate_deployment_plan(
         risks.append("Repository policy validation failed")
 
     return {
+        "provider": provider,
+        "service_name": service_name,
         "environment": environment,
         "app_provider": app_provider,
         "database_provider": database_provider,
