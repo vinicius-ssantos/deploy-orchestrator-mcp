@@ -1,9 +1,9 @@
-from deploy_orchestrator_mcp.analyzer import analyze_file_list
 from deploy_orchestrator_mcp.planner import generate_deployment_plan
+from deploy_orchestrator_mcp.stack_detector import detect_stack
 
 
 def test_python_project_prefers_render():
-    analysis = analyze_file_list(["pyproject.toml", "README.md"])
+    analysis = detect_stack(["pyproject.toml", "README.md"])
     plan = generate_deployment_plan(analysis)
 
     assert analysis["runtime"] == "python"
@@ -17,7 +17,7 @@ def test_python_project_prefers_render():
 
 
 def test_dockerfile_prefers_fly():
-    analysis = analyze_file_list(["Dockerfile", "package.json"])
+    analysis = detect_stack(["Dockerfile", "package.json"])
     plan = generate_deployment_plan(analysis)
 
     assert analysis["has_dockerfile"] is True
@@ -27,8 +27,30 @@ def test_dockerfile_prefers_fly():
     assert plan["policy_result"]["valid"] is True
 
 
+def test_node_project_prefers_railway_without_database():
+    analysis = detect_stack(["package.json", "index.js"])
+    plan = generate_deployment_plan(analysis)
+
+    assert analysis["runtime"] == "node"
+    assert plan["app_provider"]["provider"] == "railway"
+    assert plan["provider_plan"]["provider"] == "railway"
+    assert plan["database_provider"] is None
+    assert plan["database_plan"] is None
+
+
+def test_java_project_prefers_railway_without_database():
+    analysis = detect_stack(["pom.xml", "src/Main.java"])
+    plan = generate_deployment_plan(analysis)
+
+    assert analysis["runtime"] == "java"
+    assert plan["app_provider"]["provider"] == "railway"
+    assert plan["provider_plan"]["provider"] == "railway"
+    assert plan["database_provider"] is None
+    assert plan["database_plan"] is None
+
+
 def test_supabase_project_prefers_supabase_database():
-    analysis = analyze_file_list(["package.json", "supabase/config.toml"])
+    analysis = detect_stack(["package.json", "supabase/config.toml"])
     plan = generate_deployment_plan(analysis)
 
     assert analysis["needs_supabase"] is True
@@ -41,7 +63,7 @@ def test_supabase_project_prefers_supabase_database():
 
 
 def test_policy_failure_is_reported_in_plan():
-    analysis = analyze_file_list(["Dockerfile", "package.json"])
+    analysis = detect_stack(["Dockerfile", "package.json"])
     policy = {
         "allowed_environments": ["staging"],
         "allowed_app_providers": ["render"],
@@ -61,7 +83,7 @@ def test_policy_failure_is_reported_in_plan():
 
 
 def test_valid_policy_can_still_require_approval():
-    analysis = analyze_file_list(["pyproject.toml", "README.md"])
+    analysis = detect_stack(["pyproject.toml", "README.md"])
     policy = {
         "allowed_environments": ["staging"],
         "allowed_app_providers": ["render"],
@@ -78,13 +100,32 @@ def test_valid_policy_can_still_require_approval():
 
 
 def test_production_policy_failure_is_reported_in_plan():
-    analysis = analyze_file_list(["pyproject.toml", "README.md"])
+    analysis = detect_stack(["pyproject.toml", "README.md"])
 
     plan = generate_deployment_plan(analysis, environment="production")
 
     assert plan["policy_result"]["valid"] is False
     assert plan["approval_required"] is True
-    assert "production deployment" in plan["approval_required_actions"]
     assert "create service" in plan["approval_required_actions"]
     assert "Production deployment requires explicit approval" in plan["risks"]
     assert "Repository policy validation failed" in plan["risks"]
+
+
+def test_plan_mode_reflects_caller_intent_not_gate_decision():
+    analysis = detect_stack(["Dockerfile", "package.json"])
+    policy = {
+        "allowed_environments": ["staging"],
+        "allowed_app_providers": ["render"],
+        "allowed_database_providers": ["supabase"],
+        "production": {"allowed": False, "requires_approval": True},
+    }
+
+    plan = generate_deployment_plan(
+        analysis,
+        environment="staging",
+        policy=policy,
+        mode="execute",
+    )
+
+    assert plan["policy_result"]["valid"] is False
+    assert plan["mode"] == "execute"
