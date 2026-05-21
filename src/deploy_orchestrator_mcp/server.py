@@ -417,10 +417,16 @@ def deploy_generate_plan(
     files: list[str],
     environment: str = "staging",
     policy: dict | None = None,
+    mode: str = "dry-run",
 ):
     """Generate a dry-run deployment plan from repository file paths."""
     analysis = analyze_file_list(files)
-    return generate_deployment_plan(analysis, environment=environment, policy=policy)
+    return generate_deployment_plan(
+        analysis,
+        environment=environment,
+        policy=policy,
+        mode=mode,
+    )
 
 
 @mcp.tool()
