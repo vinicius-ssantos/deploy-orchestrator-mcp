@@ -110,7 +110,7 @@ async def healthz(_request):
         version = "unknown"
 
     tool_schema_parts = sorted(
-        f"{t.name}:{getattr(t, 'inputSchema', None)}"
+        f"{t.name}:{t.to_mcp_tool().inputSchema}"
         for t in await mcp.list_tools()
     )
     tool_schema_version = hashlib.sha256(" ".join(tool_schema_parts).encode()).hexdigest()[:8]
@@ -244,7 +244,7 @@ async def server_status():
         version = "unknown"
 
     tool_schema_parts = sorted(
-        f"{t.name}:{getattr(t, 'inputSchema', None)}"
+        f"{t.name}:{t.to_mcp_tool().inputSchema}"
         for t in await mcp.list_tools()
     )
     schema_version = hashlib.sha256(" ".join(tool_schema_parts).encode()).hexdigest()[:8]
