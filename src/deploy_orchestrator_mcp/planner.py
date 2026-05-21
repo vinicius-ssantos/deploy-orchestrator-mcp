@@ -108,6 +108,7 @@ def generate_deployment_plan(
 
     risks = []
     if environment == "production":
+        approval_actions.insert(0, "production deployment")
         risks.append("Production deployment requires explicit approval")
     if stack_profile.get("runtime") == "unknown":
         risks.append("Runtime could not be detected with confidence")
