@@ -1,9 +1,9 @@
-from deploy_orchestrator_mcp.approval import approval_required_actions, requires_approval
 from deploy_orchestrator_mcp.fly_provider import fly_generate_app_plan
 from deploy_orchestrator_mcp.policy import evaluate_policy
 from deploy_orchestrator_mcp.railway_provider import railway_generate_service_plan
 from deploy_orchestrator_mcp.render_provider import render_generate_service_plan
 from deploy_orchestrator_mcp.recommender import recommend_app_provider, recommend_database_provider
+from deploy_orchestrator_mcp.stack_detector import StackProfile
 from deploy_orchestrator_mcp.supabase_provider import supabase_generate_project_plan
 
 
@@ -66,11 +66,18 @@ def _build_database_plan(analysis, database_provider, environment):
     return None
 
 
-def generate_deployment_plan(analysis, environment="staging", policy=None):
-    app_provider = recommend_app_provider(analysis)
-    database_provider = recommend_database_provider(analysis)
-    provider_plan = _build_provider_plan(analysis, app_provider, database_provider, environment)
-    database_plan = _build_database_plan(analysis, database_provider, environment)
+def generate_deployment_plan(
+    stack_profile: StackProfile,
+    environment="staging",
+    policy=None,
+    mode="dry-run",
+):
+    app_provider = recommend_app_provider(stack_profile)
+    database_provider = recommend_database_provider(stack_profile)
+    provider = app_provider["provider"]
+    service_name = _service_name_from_analysis(stack_profile)
+    provider_plan = _build_provider_plan(stack_profile, app_provider, database_provider, environment)
+    database_plan = _build_database_plan(stack_profile, database_provider, environment)
     policy_result = evaluate_policy(
         policy=policy,
         environment=environment,
@@ -99,22 +106,18 @@ def generate_deployment_plan(analysis, environment="staging", policy=None):
         steps.insert(4, "Provision database or backend provider")
         approval_actions.append("create database")
 
-    approval_plan = {
-        "environment": environment,
-        "steps": steps,
-        "approval_required_actions": approval_actions,
-    }
-    required_actions = approval_required_actions(approval_plan)
-
     risks = []
     if environment == "production":
+        approval_actions.insert(0, "production deployment")
         risks.append("Production deployment requires explicit approval")
-    if analysis.get("runtime") == "unknown":
+    if stack_profile.get("runtime") == "unknown":
         risks.append("Runtime could not be detected with confidence")
     if not policy_result["valid"]:
         risks.append("Repository policy validation failed")
 
     return {
+        "provider": provider,
+        "service_name": service_name,
         "environment": environment,
         "app_provider": app_provider,
         "database_provider": database_provider,
@@ -122,8 +125,8 @@ def generate_deployment_plan(analysis, environment="staging", policy=None):
         "database_plan": database_plan,
         "policy_result": policy_result,
         "steps": steps,
-        "approval_required": requires_approval(approval_plan),
-        "approval_required_actions": required_actions,
+        "approval_required": True,
+        "approval_required_actions": approval_actions,
         "risks": risks,
-        "mode": "dry-run",
+        "mode": mode,
     }
