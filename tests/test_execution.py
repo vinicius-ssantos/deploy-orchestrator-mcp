@@ -14,7 +14,13 @@ def base_plan(**overrides):
 
 
 def valid_ci_gate(head_sha="abc123"):
-    return {"allowed": True, "head_sha": head_sha, "checked_at": "2026-05-07T12:00:00Z"}
+    return {
+        "allowed": True,
+        "blocking_checks": [],
+        "summary": "All workflows succeeded",
+        "head_sha": head_sha,
+        "checked_at": "2026-05-07T12:00:00Z",
+    }
 
 
 # ---------------------------------------------------------------------------
