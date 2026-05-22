@@ -1217,12 +1217,11 @@ def vercel_deploy_preview(
             ),
         })
 
-    ci_gate = {
-        "allowed": ci_gate_allowed,
-        "head_sha": ci_gate_head_sha or "frontend-preview",
-    }
-    if ci_gate_reason:
-        ci_gate["reason"] = ci_gate_reason
+    ci_gate = _ci_gate_from_primitive(
+        ci_gate_allowed,
+        ci_gate_head_sha or "frontend-preview",
+        ci_gate_reason,
+    )
 
     ci_errors = _validate_ci_gate(ci_gate)
     if ci_errors:
