@@ -335,7 +335,7 @@ def test_create_project_happy_path(monkeypatch):
             "my-app",
             "org-1",
             approval="APPROVED",
-            ci_gate={"allowed": True, "head_sha": "abc123"},
+            ci_gate=valid_ci_gate(),
             client=client,
         )
 
@@ -349,7 +349,7 @@ def test_apply_migration_blocks_when_sql_missing():
         "m1",
         "",
         approval="APPROVED",
-        ci_gate={"allowed": True, "head_sha": "abc123"},
+        ci_gate=valid_ci_gate(),
     )
     assert result["applied"] is False
     assert "sql is required" in result["errors"]
@@ -370,7 +370,7 @@ def test_apply_migration_happy_path(monkeypatch):
             "m1",
             "create table test(id int);",
             approval="APPROVED",
-            ci_gate={"allowed": True, "head_sha": "abc123"},
+            ci_gate=valid_ci_gate(),
             client=client,
         )
 
