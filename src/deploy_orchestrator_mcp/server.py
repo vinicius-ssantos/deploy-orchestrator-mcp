@@ -1036,14 +1036,12 @@ def supabase_create_project(
     """Create a Supabase project with approval, policy and CI gate validation."""
     import json
 
-    ci_gate = None
-    if ci_gate_allowed is not None or ci_gate_head_sha is not None:
-        ci_gate = {
-            "allowed": ci_gate_allowed,
-            "head_sha": ci_gate_head_sha,
-            "reason": ci_gate_reason,
-            "checked_at": ci_gate_checked_at,
-        }
+    ci_gate = _ci_gate_from_primitive(
+        ci_gate_allowed,
+        ci_gate_head_sha,
+        ci_gate_reason,
+        ci_gate_checked_at,
+    )
 
     policy: dict | None = None
     if policy_json:
