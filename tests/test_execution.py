@@ -35,6 +35,8 @@ def test_dry_run_mode_is_allowed_without_provider_writes():
     assert decision["mode"] == "dry-run"
     assert decision["requires_approval"] is False
     assert decision["reasons"] == []
+    assert decision["blocking_checks"] == []
+    assert decision["ci_summary"] == ""
     assert decision["audit_event"]["metadata"]["decision"] == "allowed"
 
 
@@ -111,6 +113,8 @@ def test_execute_allowed_with_valid_ci_gate_and_approval():
     )
     assert decision["allowed"] is True
     assert decision["reasons"] == []
+    assert decision["blocking_checks"] == []
+    assert decision["ci_summary"] == "All workflows succeeded"
 
 
 def test_ci_gate_head_sha_recorded_in_audit():
@@ -122,6 +126,8 @@ def test_ci_gate_head_sha_recorded_in_audit():
     )
     assert decision["audit_event"]["metadata"]["ci_gate_head_sha"] == "sha-xyz"
     assert decision["audit_event"]["metadata"]["ci_gate_allowed"] is True
+    assert decision["audit_event"]["metadata"]["ci_blocking_checks"] == []
+    assert decision["audit_event"]["metadata"]["ci_summary"] == "All workflows succeeded"
 
 
 # ---------------------------------------------------------------------------
