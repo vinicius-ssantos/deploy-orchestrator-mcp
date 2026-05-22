@@ -57,6 +57,7 @@ def test_execute_blocked_when_ci_gate_absent():
     )
     assert decision["allowed"] is False
     assert "ci_gate is required for execute mode" in decision["reasons"]
+    assert decision["missing_fields"] == ["ci_gate"]
 
 
 def test_execute_blocked_when_ci_gate_not_allowed():
@@ -64,22 +65,41 @@ def test_execute_blocked_when_ci_gate_not_allowed():
         base_plan(approval_required=False),
         approval=APPROVAL_TOKEN,
         mode="execute",
-        ci_gate={"allowed": False, "head_sha": "abc123", "reason": "tests failed"},
+        ci_gate={
+            "allowed": False,
+            "blocking_checks": ["test"],
+            "summary": "tests failed",
+        },
     )
     assert decision["allowed"] is False
     assert any("CI gate blocked" in r for r in decision["reasons"])
     assert "tests failed" in decision["reasons"][0]
+    assert decision["blocking_checks"] == ["test"]
+    assert decision["ci_summary"] == "tests failed"
 
 
-def test_execute_blocked_when_ci_gate_missing_head_sha():
+def test_execute_blocked_when_ci_gate_missing_blocking_checks():
     decision = evaluate_execution_gate(
         base_plan(approval_required=False),
         approval=APPROVAL_TOKEN,
         mode="execute",
-        ci_gate={"allowed": True},
+        ci_gate={"allowed": True, "summary": "All workflows succeeded"},
     )
     assert decision["allowed"] is False
-    assert "ci_gate.head_sha is required" in decision["reasons"]
+    assert "ci_gate is missing required fields" in decision["reasons"]
+    assert decision["missing_fields"] == ["blocking_checks"]
+
+
+def test_execute_blocked_when_ci_gate_missing_summary():
+    decision = evaluate_execution_gate(
+        base_plan(approval_required=False),
+        approval=APPROVAL_TOKEN,
+        mode="execute",
+        ci_gate={"allowed": True, "blocking_checks": []},
+    )
+    assert decision["allowed"] is False
+    assert "ci_gate is missing required fields" in decision["reasons"]
+    assert decision["missing_fields"] == ["summary"]
 
 
 def test_execute_allowed_with_valid_ci_gate_and_approval():
