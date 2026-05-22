@@ -17,14 +17,22 @@ def _approval_present(approval):
 
 
 def _validate_ci_gate(ci_gate):
-    """Validate the ci_gate dict. Returns a list of (reason, missing_fields) tuples."""
+    """Validate the required ci_gate_check contract."""
     if ci_gate is None:
-        return [("ci_gate is required for execute mode", ["ci_gate_allowed", "ci_gate_head_sha"])]
-    if not ci_gate.get("head_sha"):
-        return [("ci_gate.head_sha is required", ["ci_gate_head_sha"])]
-    if not ci_gate.get("allowed"):
-        reason = ci_gate.get("reason", "CI checks did not pass")
-        return [(f"CI gate blocked: {reason}", [])]
+        return [("ci_gate is required for execute mode", ["ci_gate"])]
+
+    missing_fields = [
+        field
+        for field in ("allowed", "blocking_checks", "summary")
+        if field not in ci_gate
+    ]
+    if missing_fields:
+        return [("ci_gate is missing required fields", missing_fields)]
+
+    if ci_gate.get("allowed") is not True:
+        summary = ci_gate.get("summary") or "CI checks did not pass"
+        return [(f"CI gate blocked: {summary}", [])]
+
     return []
 
 
@@ -81,6 +89,12 @@ def evaluate_execution_gate(plan, approval=None, mode=None, ci_gate=None):
     allowed = len(reasons) == 0
     decision = "allowed" if allowed else "blocked"
 
+    blocking_checks = []
+    ci_summary = ""
+    if isinstance(ci_gate, dict):
+        blocking_checks = list(ci_gate.get("blocking_checks") or [])
+        ci_summary = str(ci_gate.get("summary") or "")
+
     return {
         "ok": allowed,
         "allowed": allowed,
@@ -89,6 +103,8 @@ def evaluate_execution_gate(plan, approval=None, mode=None, ci_gate=None):
         "reasons": reasons,
         "errors": reasons,
         "missing_fields": missing_fields,
+        "blocking_checks": blocking_checks,
+        "ci_summary": ci_summary,
         "audit_event": create_audit_event(
             f"deployment.execution.{decision}",
             {
@@ -103,6 +119,8 @@ def evaluate_execution_gate(plan, approval=None, mode=None, ci_gate=None):
                 ),
                 "ci_gate_allowed": (ci_gate or {}).get("allowed"),
                 "ci_gate_head_sha": (ci_gate or {}).get("head_sha"),
+                "ci_blocking_checks": blocking_checks,
+                "ci_summary": ci_summary,
                 "decision": decision,
             },
         ),
