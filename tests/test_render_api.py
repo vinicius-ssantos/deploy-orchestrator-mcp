@@ -107,7 +107,7 @@ def test_render_deploy_staging_triggers_when_approved(monkeypatch):
             service_id="srv-123",
             approval="APPROVED",
             client=client,
-            ci_gate={"allowed": True, "head_sha": "abc123"},
+            ci_gate={"allowed": True, "blocking_checks": [], "summary": "All workflows succeeded", "head_sha": "abc123"},
         )
 
     assert result["triggered"] is True
