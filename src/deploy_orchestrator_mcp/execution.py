@@ -61,6 +61,8 @@ def evaluate_execution_gate(plan, approval=None, mode=None, ci_gate=None):
             "reasons": [],
             "errors": [],
             "missing_fields": [],
+            "blocking_checks": [],
+            "ci_summary": "",
             "audit_event": create_audit_event(
                 "deployment.execution.allowed",
                 {
