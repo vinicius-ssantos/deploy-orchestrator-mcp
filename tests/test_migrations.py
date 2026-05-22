@@ -63,7 +63,12 @@ def test_migration_blocks_without_ci_gate():
 def test_migration_blocks_when_ci_gate_denies():
     result = run_staging_migration(
         task_slug="deploy/migrate",
-        ci_gate={"allowed": False, "head_sha": "abc123", "reason": "tests failed"},
+        ci_gate={
+            "allowed": False,
+            "blocking_checks": ["test"],
+            "summary": "tests failed",
+            "head_sha": "abc123",
+        },
         approval=APPROVAL_TOKEN,
     )
 
