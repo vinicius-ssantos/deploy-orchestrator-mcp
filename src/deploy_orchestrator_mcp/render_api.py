@@ -391,40 +391,14 @@ def render_deploy_staging(
         result.update({"triggered": False, "deploy_id": None, "gate": gate})
         return redact(result)
 
-    payload = {"clearCache": "clear"} if clear_cache else None
-    body, audit_event = _request(
-        "POST",
-        f"/services/{service_id}/deploys",
-        api_key=resolved_api_key,
+    result = trigger_deploy(
+        deploy_plan,
+        {"api_key": resolved_api_key},
         client=client,
-        json=payload,
-        operation="deploy_staging",
+        clear_cache=clear_cache,
     )
-
-    if isinstance(body, Mapping) and body.get("error"):
-        return redact(
-            {
-                "provider": "render",
-                "triggered": False,
-                "deploy_id": None,
-                "gate": gate,
-                "errors": [body],
-                "audit_event": audit_event,
-            }
-        )
-
-    deploy = _normalize_deploy(body)
-    return redact(
-        {
-            "provider": "render",
-            "triggered": True,
-            "deploy_id": deploy.get("id"),
-            "status": deploy.get("status"),
-            "gate": gate,
-            "deploy": deploy,
-            "audit_event": audit_event,
-        }
-    )
+    result["gate"] = gate
+    return redact(result)
 
 
 def render_get_deploy_status(
