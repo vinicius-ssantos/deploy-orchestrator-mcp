@@ -415,53 +415,14 @@ def render_get_deploy_status(
     if not resolved_api_key:
         return _missing_api_key_result("get_deploy_status")
 
-    deadline = time.monotonic() + max(timeout_seconds, 0)
-    attempts = 0
-
-    while True:
-        attempts += 1
-        path = f"/services/{service_id}/deploys/{deploy_id}" if deploy_id else f"/services/{service_id}/deploys"
-        params = None if deploy_id else {"limit": 1}
-        body, audit_event = _request(
-            "GET",
-            path,
-            api_key=resolved_api_key,
-            client=client,
-            params=params,
-            operation="get_deploy_status",
-            retryable=True,
-        )
-
-        if isinstance(body, Mapping) and body.get("error"):
-            return redact(
-                {
-                    "provider": "render",
-                    "ok": False,
-                    "service_id": service_id,
-                    "deploy_id": deploy_id,
-                    "errors": [body],
-                    "audit_event": audit_event,
-                }
-            )
-
-        deploy = _normalize_deploy(body)
-        status = deploy.get("status")
-        if not timeout_seconds or status in FINAL_DEPLOY_STATUSES or time.monotonic() >= deadline:
-            return redact(
-                {
-                    "provider": "render",
-                    "ok": True,
-                    "service_id": service_id,
-                    "deploy_id": deploy.get("id") or deploy_id,
-                    "status": status,
-                    "complete": status in FINAL_DEPLOY_STATUSES,
-                    "attempts": attempts,
-                    "deploy": deploy,
-                    "audit_event": audit_event,
-                }
-            )
-
-        time.sleep(max(poll_interval_seconds, 0))
+    return poll_deploy_status(
+        deploy_id,
+        {"api_key": resolved_api_key},
+        service_id=service_id,
+        timeout_s=timeout_seconds,
+        poll_interval_s=poll_interval_seconds,
+        client=client,
+    )
 
 
 def render_healthcheck(
