@@ -194,7 +194,7 @@ def test_deploy_triggers_when_approved(monkeypatch):
 def test_deploy_missing_token(monkeypatch):
     monkeypatch.delenv("RAILWAY_TOKEN", raising=False)
     result = railway_deploy("svc-1", "env-1", approval="APPROVED",
-                            ci_gate={"allowed": True, "head_sha": "abc123"})
+                            ci_gate={"allowed": True, "blocking_checks": [], "summary": "All workflows succeeded", "head_sha": "abc123"})
     assert result["triggered"] is False
     assert any("not configured" in e for e in result["errors"])
 
