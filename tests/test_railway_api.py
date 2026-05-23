@@ -364,7 +364,7 @@ def test_provision_postgres_ok(monkeypatch):
 def test_provision_postgres_missing_token(monkeypatch):
     monkeypatch.delenv("RAILWAY_TOKEN", raising=False)
     result = railway_provision_postgres("proj-1", "env-1", approval="APPROVED",
-                                        ci_gate={"allowed": True, "head_sha": "abc123"})
+                                        ci_gate={"allowed": True, "blocking_checks": [], "summary": "All workflows succeeded", "head_sha": "abc123"})
     assert result["provisioned"] is False
     assert any("not configured" in e for e in result["errors"])
 
