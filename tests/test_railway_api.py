@@ -185,7 +185,7 @@ def test_deploy_triggers_when_approved(monkeypatch):
 
     with _mock_client(handler) as client:
         result = railway_deploy("svc-1", "env-1", approval="APPROVED", client=client,
-                                ci_gate={"allowed": True, "head_sha": "abc123"})
+                                ci_gate={"allowed": True, "blocking_checks": [], "summary": "All workflows succeeded", "head_sha": "abc123"})
 
     assert result["triggered"] is True
     assert result["gate"]["allowed"] is True
