@@ -7,6 +7,8 @@ from deploy_orchestrator_mcp.migrations import run_staging_migration
 def valid_ci_gate(head_sha="abc123"):
     return {
         "allowed": True,
+        "blocking_checks": [],
+        "summary": "All workflows succeeded",
         "head_sha": head_sha,
         "checked_at": "2026-05-08T12:00:00Z",
     }
@@ -61,7 +63,12 @@ def test_migration_blocks_without_ci_gate():
 def test_migration_blocks_when_ci_gate_denies():
     result = run_staging_migration(
         task_slug="deploy/migrate",
-        ci_gate={"allowed": False, "head_sha": "abc123", "reason": "tests failed"},
+        ci_gate={
+            "allowed": False,
+            "blocking_checks": ["test"],
+            "summary": "tests failed",
+            "head_sha": "abc123",
+        },
         approval=APPROVAL_TOKEN,
     )
 

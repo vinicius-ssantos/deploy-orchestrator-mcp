@@ -20,6 +20,15 @@ def _mock_client(handler):
     return httpx.Client(base_url="https://api.supabase.com/v1", transport=transport)
 
 
+def valid_ci_gate(head_sha="abc123"):
+    return {
+        "allowed": True,
+        "blocking_checks": [],
+        "summary": "All workflows succeeded",
+        "head_sha": head_sha,
+    }
+
+
 # ---------------------------------------------------------------------------
 # supabase_validate_credentials
 # ---------------------------------------------------------------------------
@@ -326,7 +335,7 @@ def test_create_project_happy_path(monkeypatch):
             "my-app",
             "org-1",
             approval="APPROVED",
-            ci_gate={"allowed": True, "head_sha": "abc123"},
+            ci_gate=valid_ci_gate(),
             client=client,
         )
 
@@ -340,7 +349,7 @@ def test_apply_migration_blocks_when_sql_missing():
         "m1",
         "",
         approval="APPROVED",
-        ci_gate={"allowed": True, "head_sha": "abc123"},
+        ci_gate=valid_ci_gate(),
     )
     assert result["applied"] is False
     assert "sql is required" in result["errors"]
@@ -361,7 +370,7 @@ def test_apply_migration_happy_path(monkeypatch):
             "m1",
             "create table test(id int);",
             approval="APPROVED",
-            ci_gate={"allowed": True, "head_sha": "abc123"},
+            ci_gate=valid_ci_gate(),
             client=client,
         )
 

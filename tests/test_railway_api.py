@@ -185,7 +185,7 @@ def test_deploy_triggers_when_approved(monkeypatch):
 
     with _mock_client(handler) as client:
         result = railway_deploy("svc-1", "env-1", approval="APPROVED", client=client,
-                                ci_gate={"allowed": True, "head_sha": "abc123"})
+                                ci_gate={"allowed": True, "blocking_checks": [], "summary": "All workflows succeeded", "head_sha": "abc123"})
 
     assert result["triggered"] is True
     assert result["gate"]["allowed"] is True
@@ -194,7 +194,7 @@ def test_deploy_triggers_when_approved(monkeypatch):
 def test_deploy_missing_token(monkeypatch):
     monkeypatch.delenv("RAILWAY_TOKEN", raising=False)
     result = railway_deploy("svc-1", "env-1", approval="APPROVED",
-                            ci_gate={"allowed": True, "head_sha": "abc123"})
+                            ci_gate={"allowed": True, "blocking_checks": [], "summary": "All workflows succeeded", "head_sha": "abc123"})
     assert result["triggered"] is False
     assert any("not configured" in e for e in result["errors"])
 
@@ -353,7 +353,7 @@ def test_provision_postgres_ok(monkeypatch):
 
     with _mock_client(handler) as client:
         result = railway_provision_postgres("proj-1", "env-1", approval="APPROVED", client=client,
-                                            ci_gate={"allowed": True, "head_sha": "abc123"})
+                                            ci_gate={"allowed": True, "blocking_checks": [], "summary": "All workflows succeeded", "head_sha": "abc123"})
 
     assert result["provisioned"] is True
     assert result["database_id"] == "db-123"
@@ -364,7 +364,7 @@ def test_provision_postgres_ok(monkeypatch):
 def test_provision_postgres_missing_token(monkeypatch):
     monkeypatch.delenv("RAILWAY_TOKEN", raising=False)
     result = railway_provision_postgres("proj-1", "env-1", approval="APPROVED",
-                                        ci_gate={"allowed": True, "head_sha": "abc123"})
+                                        ci_gate={"allowed": True, "blocking_checks": [], "summary": "All workflows succeeded", "head_sha": "abc123"})
     assert result["provisioned"] is False
     assert any("not configured" in e for e in result["errors"])
 
@@ -377,7 +377,7 @@ def test_provision_postgres_api_error(monkeypatch):
 
     with _mock_client(handler) as client:
         result = railway_provision_postgres("bad-proj", "env-1", approval="APPROVED", client=client,
-                                            ci_gate={"allowed": True, "head_sha": "abc123"})
+                                            ci_gate={"allowed": True, "blocking_checks": [], "summary": "All workflows succeeded", "head_sha": "abc123"})
 
     assert result["provisioned"] is False
     assert "errors" in result

@@ -412,6 +412,37 @@ def repo_analyze(files: list[str]):
     return analyze_file_list(files)
 
 
+def _ci_gate_from_primitive(
+    ci_gate_allowed: bool | None,
+    ci_gate_head_sha: str | None = None,
+    ci_gate_reason: str | None = None,
+    ci_gate_checked_at: str | None = None,
+):
+    """Build the explicit execution-gate CI contract from public primitive fields."""
+    if (
+        ci_gate_allowed is None
+        and ci_gate_head_sha is None
+        and ci_gate_reason is None
+        and ci_gate_checked_at is None
+    ):
+        return None
+
+    if ci_gate_allowed is True:
+        blocking_checks = []
+        summary = ci_gate_reason or "All workflows succeeded"
+    else:
+        summary = ci_gate_reason or "CI gate blocked"
+        blocking_checks = [summary]
+
+    return {
+        "allowed": ci_gate_allowed,
+        "blocking_checks": blocking_checks,
+        "summary": summary,
+        "head_sha": ci_gate_head_sha,
+        "checked_at": ci_gate_checked_at,
+    }
+
+
 @mcp.tool()
 def deploy_generate_plan(
     files: list[str],
@@ -519,14 +550,12 @@ def render_deploy_staging(
     ci_gate_checked_at: str | None = None,
 ):
     """Trigger a Render staging deploy after approval and CI gate validation."""
-    ci_gate = None
-    if ci_gate_allowed is not None or ci_gate_head_sha is not None:
-        ci_gate = {
-            "allowed": ci_gate_allowed,
-            "head_sha": ci_gate_head_sha,
-            "reason": ci_gate_reason,
-            "checked_at": ci_gate_checked_at,
-        }
+    ci_gate = _ci_gate_from_primitive(
+        ci_gate_allowed,
+        ci_gate_head_sha,
+        ci_gate_reason,
+        ci_gate_checked_at,
+    )
     return render_api_deploy_staging(
         service_id=service_id,
         approval=approval,
@@ -663,14 +692,12 @@ def run_staging_migration(
     """
     import json
 
-    ci_gate = None
-    if ci_gate_allowed is not None or ci_gate_head_sha is not None:
-        ci_gate = {
-            "allowed": ci_gate_allowed,
-            "head_sha": ci_gate_head_sha,
-            "reason": ci_gate_reason,
-            "checked_at": ci_gate_checked_at,
-        }
+    ci_gate = _ci_gate_from_primitive(
+        ci_gate_allowed,
+        ci_gate_head_sha,
+        ci_gate_reason,
+        ci_gate_checked_at,
+    )
 
     policy: dict | None = None
     if policy_json:
@@ -1009,14 +1036,12 @@ def supabase_create_project(
     """Create a Supabase project with approval, policy and CI gate validation."""
     import json
 
-    ci_gate = None
-    if ci_gate_allowed is not None or ci_gate_head_sha is not None:
-        ci_gate = {
-            "allowed": ci_gate_allowed,
-            "head_sha": ci_gate_head_sha,
-            "reason": ci_gate_reason,
-            "checked_at": ci_gate_checked_at,
-        }
+    ci_gate = _ci_gate_from_primitive(
+        ci_gate_allowed,
+        ci_gate_head_sha,
+        ci_gate_reason,
+        ci_gate_checked_at,
+    )
 
     policy: dict | None = None
     if policy_json:
@@ -1066,14 +1091,12 @@ def supabase_apply_migration(
     """Apply SQL migration in Supabase with approval, policy and CI gate validation."""
     import json
 
-    ci_gate = None
-    if ci_gate_allowed is not None or ci_gate_head_sha is not None:
-        ci_gate = {
-            "allowed": ci_gate_allowed,
-            "head_sha": ci_gate_head_sha,
-            "reason": ci_gate_reason,
-            "checked_at": ci_gate_checked_at,
-        }
+    ci_gate = _ci_gate_from_primitive(
+        ci_gate_allowed,
+        ci_gate_head_sha,
+        ci_gate_reason,
+        ci_gate_checked_at,
+    )
 
     policy: dict | None = None
     if policy_json:
@@ -1194,12 +1217,11 @@ def vercel_deploy_preview(
             ),
         })
 
-    ci_gate = {
-        "allowed": ci_gate_allowed,
-        "head_sha": ci_gate_head_sha or "frontend-preview",
-    }
-    if ci_gate_reason:
-        ci_gate["reason"] = ci_gate_reason
+    ci_gate = _ci_gate_from_primitive(
+        ci_gate_allowed,
+        ci_gate_head_sha or "frontend-preview",
+        ci_gate_reason,
+    )
 
     ci_errors = _validate_ci_gate(ci_gate)
     if ci_errors:
