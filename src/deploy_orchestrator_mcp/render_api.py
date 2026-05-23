@@ -445,47 +445,13 @@ def render_healthcheck(
             ),
         }
 
-    owns_client = client is None
-    http_client = client or httpx.Client(timeout=timeout_seconds)
-
-    try:
-        response = http_client.get(url)
-        healthy = response.status_code == expected_status
-        return redact(
-            {
-                "provider": "render",
-                "healthy": healthy,
-                "status_code": response.status_code,
-                "expected_status": expected_status,
-                "url": url,
-                "audit_event": create_audit_event(
-                    "render.healthcheck.completed",
-                    {
-                        "provider": "render",
-                        "url": url,
-                        "status_code": response.status_code,
-                        "healthy": healthy,
-                    },
-                ),
-            }
-        )
-    except httpx.HTTPError as exc:
-        return redact(
-            {
-                "provider": "render",
-                "healthy": False,
-                "status_code": None,
-                "errors": [str(exc)],
-                "url": url,
-                "audit_event": create_audit_event(
-                    "render.healthcheck.failed",
-                    {"provider": "render", "url": url, "error": str(exc)},
-                ),
-            }
-        )
-    finally:
-        if owns_client:
-            http_client.close()
+    return run_healthcheck(
+        url,
+        retries=1,
+        expected_status=expected_status,
+        timeout_seconds=timeout_seconds,
+        client=client,
+    )
 
 
 def render_get_build_logs(
