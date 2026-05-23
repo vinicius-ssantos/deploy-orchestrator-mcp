@@ -8,6 +8,12 @@ from deploy_orchestrator_mcp.audit import create_audit_event
 from deploy_orchestrator_mcp.credentials import get_credential
 from deploy_orchestrator_mcp.execution import evaluate_execution_gate
 from deploy_orchestrator_mcp.redaction import redact
+from deploy_orchestrator_mcp.render_deploy import (
+    fetch_logs as deploy_fetch_logs,
+    poll_deploy_status,
+    run_healthcheck,
+    trigger_deploy,
+)
 
 RENDER_API_BASE_URL = "https://api.render.com/v1"
 FINAL_DEPLOY_STATUSES = {"live", "deactivated", "build_failed", "update_failed", "canceled"}
