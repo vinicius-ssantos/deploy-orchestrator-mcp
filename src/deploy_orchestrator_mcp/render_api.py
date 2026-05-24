@@ -466,6 +466,8 @@ def render_get_build_logs(
     if not key:
         return _missing_api_key_result("get_build_logs")
 
+    return deploy_fetch_logs(deploy_id, {"api_key": key}, tail=tail, client=client)
+
     tail = min(tail, 500)
     body, audit_event = _request(
         "GET",
