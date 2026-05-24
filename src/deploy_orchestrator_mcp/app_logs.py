@@ -8,6 +8,7 @@ audit metadata.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -19,6 +20,9 @@ from deploy_orchestrator_mcp.render_api import (
 )
 
 MAX_TAIL = 500
+_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)\b(token|secret|password|passwd|api[_-]?key|authorization|database_url)=([^\s]+)"
+)
 
 LogFetcher = Callable[..., dict[str, Any]]
 
@@ -31,10 +35,14 @@ def _cap_tail(tail: int | None) -> int:
     return max(1, min(value, MAX_TAIL))
 
 
+def _sanitize_message(message: str) -> str:
+    return _SECRET_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}=[REDACTED]", message)
+
+
 def _message(line: Any) -> str:
     if isinstance(line, Mapping):
-        return str(line.get("message") or line.get("text") or line.get("line") or "")
-    return str(line)
+        return _sanitize_message(str(line.get("message") or line.get("text") or line.get("line") or ""))
+    return _sanitize_message(str(line))
 
 
 def _timestamp(line: Any) -> str | None:
