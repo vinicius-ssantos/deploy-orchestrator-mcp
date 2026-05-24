@@ -1,3 +1,5 @@
+import json
+
 import httpx
 
 from deploy_orchestrator_mcp.render_api import render_rollback_staging
@@ -15,7 +17,7 @@ def test_rollback_deploy_success():
     def handler(request):
         assert request.method == "POST"
         assert request.url.path == "/v1/services/srv-123/rollback"
-        assert request.json() == {"deployId": "dep-old"}
+        assert json.loads(request.content) == {"deployId": "dep-old"}
         return httpx.Response(200, json={"id": "dep-new", "status": "build_in_progress"})
 
     with _client(handler) as client:
@@ -84,7 +86,7 @@ def test_render_rollback_staging_delegates_after_gates():
     def handler(request):
         assert request.method == "POST"
         assert request.url.path == "/v1/services/srv-123/rollback"
-        assert request.json() == {"deployId": "dep-old"}
+        assert json.loads(request.content) == {"deployId": "dep-old"}
         return httpx.Response(200, json={"id": "dep-new", "status": "build_in_progress"})
 
     with _client(handler) as client:
