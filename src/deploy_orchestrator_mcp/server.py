@@ -844,6 +844,44 @@ def render_cancel_task(task_run_id: str, confirm: str = ""):
 
 
 @mcp.tool()
+def railway_set_env_vars(
+    project_id: str,
+    service_id: str,
+    environment_id: str,
+    variables_json: str,
+    approval: str | bool | None = None,
+    ci_gate_allowed: bool | None = None,
+    ci_gate_head_sha: str | None = None,
+    ci_gate_reason: str | None = None,
+    ci_gate_checked_at: str | None = None,
+):
+    """Set Railway service environment variables after approval and CI gate validation.
+
+    variables_json must be a JSON object. Values are never returned in responses or audit metadata.
+    """
+    try:
+        variables = json.loads(variables_json)
+    except json.JSONDecodeError as exc:
+        return {"ok": False, "errors": [f"invalid variables_json: {exc}"]}
+    if not isinstance(variables, dict):
+        return {"ok": False, "errors": ["variables_json must decode to a JSON object"]}
+    ci_gate = _ci_gate_from_primitive(
+        ci_gate_allowed,
+        ci_gate_head_sha,
+        ci_gate_reason,
+        ci_gate_checked_at,
+    )
+    return railway_api_set_env_vars(
+        project_id=project_id,
+        service_id=service_id,
+        environment_id=environment_id,
+        variables=variables,
+        approval=approval,
+        ci_gate=ci_gate,
+    )
+
+
+@mcp.tool()
 def railway_validate(environment: str = "staging"):
     """Validate whether a Railway dry-run request is allowed."""
     return railway_validate_request(environment=environment)
