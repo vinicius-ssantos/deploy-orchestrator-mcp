@@ -9,6 +9,11 @@ _START_TIME = time.time()
 
 from deploy_orchestrator_mcp.analyzer import analyze_file_list
 from deploy_orchestrator_mcp.audit import audit_log_list as _audit_log_list, audit_log_status as _audit_log_status
+from deploy_orchestrator_mcp.app_logs import (
+    app_get_build_logs as app_logs_get_build_logs,
+    app_get_runtime_logs as app_logs_get_runtime_logs,
+    app_search_logs as app_logs_search_logs,
+)
 from deploy_orchestrator_mcp.auth import auth_status, validate_bearer_token
 from deploy_orchestrator_mcp.config import get_settings
 from deploy_orchestrator_mcp.coolify_provider import (
@@ -600,6 +605,62 @@ def render_get_build_logs(deploy_id: str, tail: int = 100):
 def render_get_runtime_logs(service_id: str, tail: int = 100):
     """Fetch recent runtime logs for a Render service."""
     return render_api_get_runtime_logs(service_id=service_id, tail=tail)
+
+
+@mcp.tool()
+def app_get_runtime_logs(
+    provider: str,
+    service_id: str,
+    tail: int = 100,
+    since: str | None = None,
+    level: str | None = None,
+    query: str | None = None,
+):
+    """Fetch normalized runtime/application logs for a service."""
+    return app_logs_get_runtime_logs(
+        provider=provider,
+        service_id=service_id,
+        tail=tail,
+        since=since,
+        level=level,
+        query=query,
+    )
+
+
+@mcp.tool()
+def app_get_build_logs(
+    provider: str,
+    deploy_id: str,
+    tail: int = 100,
+    query: str | None = None,
+):
+    """Fetch normalized build/deploy logs for a deployment."""
+    return app_logs_get_build_logs(
+        provider=provider,
+        deploy_id=deploy_id,
+        tail=tail,
+        query=query,
+    )
+
+
+@mcp.tool()
+def app_search_logs(
+    provider: str,
+    service_id: str,
+    query: str,
+    tail: int = 200,
+    since: str | None = None,
+    level: str | None = None,
+):
+    """Search runtime logs using a text query and optional severity filters."""
+    return app_logs_search_logs(
+        provider=provider,
+        service_id=service_id,
+        query=query,
+        tail=tail,
+        since=since,
+        level=level,
+    )
 
 
 @mcp.tool()
