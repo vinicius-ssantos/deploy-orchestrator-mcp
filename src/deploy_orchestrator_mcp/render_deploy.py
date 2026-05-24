@@ -167,6 +167,55 @@ def fetch_logs(deploy_id: str, credentials: Mapping[str, Any] | str,
                    "truncated": len(lines) >= capped_tail, "audit_event": audit_event})
 
 
+def rollback_deploy(service_id: str, target_deploy_id: str, credentials: Mapping[str, Any] | str,
+                    *, client: httpx.Client | None = None) -> dict[str, Any]:
+    """Trigger a Render rollback to a previous deploy.
+
+    The caller must enforce environment, approval, and destructive confirmation
+    gates before invoking this provider write helper.
+    """
+    api_key = _api_key(credentials)
+    if not api_key:
+        return {"provider": "render", "rolled_back": False,
+                "service_id": service_id, "target_deploy_id": target_deploy_id,
+                "errors": ["Render API key is not configured"]}
+    if not service_id:
+        return {"provider": "render", "rolled_back": False,
+                "service_id": service_id, "target_deploy_id": target_deploy_id,
+                "errors": ["service_id is required"]}
+    if not target_deploy_id:
+        return {"provider": "render", "rolled_back": False,
+                "service_id": service_id, "target_deploy_id": target_deploy_id,
+                "errors": ["target_deploy_id is required"]}
+
+    body, audit_event = _request(
+        "POST",
+        f"/services/{service_id}/rollback",
+        api_key=api_key,
+        client=client,
+        json={"deployId": target_deploy_id},
+        operation="rollback_staging",
+    )
+    if isinstance(body, Mapping) and body.get("error"):
+        return redact({"provider": "render", "rolled_back": False,
+                       "service_id": service_id,
+                       "target_deploy_id": target_deploy_id,
+                       "errors": [body], "audit_event": audit_event})
+
+    deploy = _normalize_deploy(body)
+    return redact({"provider": "render", "rolled_back": True,
+                   "service_id": service_id,
+                   "target_deploy_id": target_deploy_id,
+                   "rollback_deploy_id": deploy.get("id"),
+                   "status": deploy.get("status"),
+                   "deploy": deploy,
+                   "next_steps": [
+                       "Poll render_get_deploy_status until status is 'live'",
+                       "Run render_healthcheck after status reaches 'live'",
+                   ],
+                   "audit_event": audit_event})
+
+
 def run_healthcheck(url: str, *, retries: int = 3, expected_status: int = 200,
                     timeout_seconds: float = 10.0,
                     client: httpx.Client | None = None) -> dict[str, Any]:
