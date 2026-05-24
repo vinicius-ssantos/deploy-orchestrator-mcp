@@ -34,6 +34,7 @@ from deploy_orchestrator_mcp.migrations import run_staging_migration as migratio
 from deploy_orchestrator_mcp.planner import generate_deployment_plan
 from deploy_orchestrator_mcp.policy import evaluate_policy, parse_repo_policy
 from deploy_orchestrator_mcp.providers import get_provider_capability, list_provider_capabilities
+from deploy_orchestrator_mcp.railway_env_vars import railway_set_env_vars as railway_api_set_env_vars
 from deploy_orchestrator_mcp.railway_api import (
     railway_deploy as railway_api_deploy,
     railway_get_deploy_status as railway_api_get_deploy_status,
@@ -50,6 +51,7 @@ from deploy_orchestrator_mcp.railway_provider import (
     railway_generate_service_plan,
     railway_validate_request,
 )
+from deploy_orchestrator_mcp.render_env_vars import render_set_env_vars as render_api_set_env_vars
 from deploy_orchestrator_mcp.render_api import (
     render_deploy_staging as render_api_deploy_staging,
     render_get_build_logs as render_api_get_build_logs,
@@ -660,6 +662,40 @@ def app_search_logs(
         tail=tail,
         since=since,
         level=level,
+    )
+
+
+@mcp.tool()
+def render_set_env_vars(
+    service_id: str,
+    variables_json: str,
+    approval: str | bool | None = None,
+    ci_gate_allowed: bool | None = None,
+    ci_gate_head_sha: str | None = None,
+    ci_gate_reason: str | None = None,
+    ci_gate_checked_at: str | None = None,
+):
+    """Set Render service environment variables after approval and CI gate validation.
+
+    variables_json must be a JSON object. Values are never returned in responses or audit metadata.
+    """
+    try:
+        variables = json.loads(variables_json)
+    except json.JSONDecodeError as exc:
+        return {"ok": False, "errors": [f"invalid variables_json: {exc}"]}
+    if not isinstance(variables, dict):
+        return {"ok": False, "errors": ["variables_json must decode to a JSON object"]}
+    ci_gate = _ci_gate_from_primitive(
+        ci_gate_allowed,
+        ci_gate_head_sha,
+        ci_gate_reason,
+        ci_gate_checked_at,
+    )
+    return render_api_set_env_vars(
+        service_id=service_id,
+        variables=variables,
+        approval=approval,
+        ci_gate=ci_gate,
     )
 
 
