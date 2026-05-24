@@ -8,6 +8,12 @@ from deploy_orchestrator_mcp.audit import create_audit_event
 from deploy_orchestrator_mcp.credentials import get_credential
 from deploy_orchestrator_mcp.execution import evaluate_execution_gate
 from deploy_orchestrator_mcp.redaction import redact
+from deploy_orchestrator_mcp.render_deploy import (
+    fetch_logs as deploy_fetch_logs,
+    poll_deploy_status,
+    run_healthcheck,
+    trigger_deploy,
+)
 
 RENDER_API_BASE_URL = "https://api.render.com/v1"
 FINAL_DEPLOY_STATUSES = {"live", "deactivated", "build_failed", "update_failed", "canceled"}
@@ -385,40 +391,14 @@ def render_deploy_staging(
         result.update({"triggered": False, "deploy_id": None, "gate": gate})
         return redact(result)
 
-    payload = {"clearCache": "clear"} if clear_cache else None
-    body, audit_event = _request(
-        "POST",
-        f"/services/{service_id}/deploys",
-        api_key=resolved_api_key,
+    result = trigger_deploy(
+        deploy_plan,
+        {"api_key": resolved_api_key},
         client=client,
-        json=payload,
-        operation="deploy_staging",
+        clear_cache=clear_cache,
     )
-
-    if isinstance(body, Mapping) and body.get("error"):
-        return redact(
-            {
-                "provider": "render",
-                "triggered": False,
-                "deploy_id": None,
-                "gate": gate,
-                "errors": [body],
-                "audit_event": audit_event,
-            }
-        )
-
-    deploy = _normalize_deploy(body)
-    return redact(
-        {
-            "provider": "render",
-            "triggered": True,
-            "deploy_id": deploy.get("id"),
-            "status": deploy.get("status"),
-            "gate": gate,
-            "deploy": deploy,
-            "audit_event": audit_event,
-        }
-    )
+    result["gate"] = gate
+    return redact(result)
 
 
 def render_get_deploy_status(
@@ -435,53 +415,14 @@ def render_get_deploy_status(
     if not resolved_api_key:
         return _missing_api_key_result("get_deploy_status")
 
-    deadline = time.monotonic() + max(timeout_seconds, 0)
-    attempts = 0
-
-    while True:
-        attempts += 1
-        path = f"/services/{service_id}/deploys/{deploy_id}" if deploy_id else f"/services/{service_id}/deploys"
-        params = None if deploy_id else {"limit": 1}
-        body, audit_event = _request(
-            "GET",
-            path,
-            api_key=resolved_api_key,
-            client=client,
-            params=params,
-            operation="get_deploy_status",
-            retryable=True,
-        )
-
-        if isinstance(body, Mapping) and body.get("error"):
-            return redact(
-                {
-                    "provider": "render",
-                    "ok": False,
-                    "service_id": service_id,
-                    "deploy_id": deploy_id,
-                    "errors": [body],
-                    "audit_event": audit_event,
-                }
-            )
-
-        deploy = _normalize_deploy(body)
-        status = deploy.get("status")
-        if not timeout_seconds or status in FINAL_DEPLOY_STATUSES or time.monotonic() >= deadline:
-            return redact(
-                {
-                    "provider": "render",
-                    "ok": True,
-                    "service_id": service_id,
-                    "deploy_id": deploy.get("id") or deploy_id,
-                    "status": status,
-                    "complete": status in FINAL_DEPLOY_STATUSES,
-                    "attempts": attempts,
-                    "deploy": deploy,
-                    "audit_event": audit_event,
-                }
-            )
-
-        time.sleep(max(poll_interval_seconds, 0))
+    return poll_deploy_status(
+        deploy_id,
+        {"api_key": resolved_api_key},
+        service_id=service_id,
+        timeout_s=timeout_seconds,
+        poll_interval_s=poll_interval_seconds,
+        client=client,
+    )
 
 
 def render_healthcheck(
@@ -504,47 +445,13 @@ def render_healthcheck(
             ),
         }
 
-    owns_client = client is None
-    http_client = client or httpx.Client(timeout=timeout_seconds)
-
-    try:
-        response = http_client.get(url)
-        healthy = response.status_code == expected_status
-        return redact(
-            {
-                "provider": "render",
-                "healthy": healthy,
-                "status_code": response.status_code,
-                "expected_status": expected_status,
-                "url": url,
-                "audit_event": create_audit_event(
-                    "render.healthcheck.completed",
-                    {
-                        "provider": "render",
-                        "url": url,
-                        "status_code": response.status_code,
-                        "healthy": healthy,
-                    },
-                ),
-            }
-        )
-    except httpx.HTTPError as exc:
-        return redact(
-            {
-                "provider": "render",
-                "healthy": False,
-                "status_code": None,
-                "errors": [str(exc)],
-                "url": url,
-                "audit_event": create_audit_event(
-                    "render.healthcheck.failed",
-                    {"provider": "render", "url": url, "error": str(exc)},
-                ),
-            }
-        )
-    finally:
-        if owns_client:
-            http_client.close()
+    return run_healthcheck(
+        url,
+        retries=1,
+        expected_status=expected_status,
+        timeout_seconds=timeout_seconds,
+        client=client,
+    )
 
 
 def render_get_build_logs(
@@ -558,6 +465,8 @@ def render_get_build_logs(
     key = _render_api_key(api_key)
     if not key:
         return _missing_api_key_result("get_build_logs")
+
+    return deploy_fetch_logs(deploy_id, {"api_key": key}, tail=tail, client=client)
 
     tail = min(tail, 500)
     body, audit_event = _request(
