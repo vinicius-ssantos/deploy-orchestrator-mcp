@@ -11,6 +11,7 @@ from deploy_orchestrator_mcp.redaction import redact
 from deploy_orchestrator_mcp.render_deploy import (
     fetch_logs as deploy_fetch_logs,
     poll_deploy_status,
+    rollback_deploy,
     run_healthcheck,
     trigger_deploy,
 )
@@ -607,36 +608,9 @@ def render_rollback_staging(
     if not key:
         return _missing_api_key_result("rollback_staging")
 
-    body, audit_event = _request(
-        "POST",
-        f"/services/{service_id}/rollback",
-        api_key=key,
+    return rollback_deploy(
+        service_id,
+        target_deploy_id,
+        {"api_key": key},
         client=client,
-        json={"deployId": target_deploy_id},
-        operation="rollback_staging",
     )
-
-    if "error" in body:
-        return redact({
-            "provider": "render",
-            "rolled_back": False,
-            "service_id": service_id,
-            "target_deploy_id": target_deploy_id,
-            "errors": [body.get("response", {}).get("message", "unknown error")],
-            "audit_event": audit_event,
-        })
-
-    deploy = _normalize_deploy(body)
-    return redact({
-        "provider": "render",
-        "rolled_back": True,
-        "service_id": service_id,
-        "target_deploy_id": target_deploy_id,
-        "rollback_deploy_id": deploy.get("id"),
-        "status": deploy.get("status"),
-        "next_steps": [
-            "Poll render_get_deploy_status until status is 'live'",
-            "Run render_healthcheck after status reaches 'live'",
-        ],
-        "audit_event": audit_event,
-    })
